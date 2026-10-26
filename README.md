@@ -53,7 +53,9 @@ Server keys and webhook secrets belong on the backend. Never embed them in this 
 
 The default distribution is one repository-root Worker and D1 binding `DB`. The deployment script applies migrations using the binding name, so database renames do not break the template. Runtime secrets `APP_SECRET` and `SETUP_TOKEN` must be different fresh random values, at least 32 characters, entered through Cloudflare's secret controls. Example placeholders fail closed.
 
-The official guided button will be linked here when the public repository is published and tested. See [deployment](docs/operations/deployment.md) for CLI, account selection, environment isolation, upgrades and the clean-install checks. The running app never needs a Cloudflare control-plane API token.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/SyedMuzamilM/analytica)
+
+This is the guided installation template. Its clean-account install/rename/retry/update matrix is still pending remote verification; the button link alone is not evidence that those checks passed. See [deployment](docs/operations/deployment.md) for CLI, account selection, environment isolation, upgrades and the clean-install checks. The running app never needs a Cloudflare control-plane API token.
 
 Initial conservative limits are 1,000 accepted event envelopes per site/day and 2,000 per installation/day. Engagement and idempotency receipts consume writes too. These are safety defaults, not a verified free-tier capacity promise. Free D1 databases are limited to 500 MB each. See [measured local write costs](docs/decisions/atomic-ingestion.md).
 

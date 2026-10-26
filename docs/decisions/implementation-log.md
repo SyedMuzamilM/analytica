@@ -17,3 +17,5 @@ The integrated implementation passes 54 Worker/D1 tests, four Chromium flows, Ty
 Two native implementation agents reached their provider usage limit after writing their files. The primary agent finished integration and verified all current suites. Independent GLM Free, DeepSeek Free and Antigravity reviews of the actual implementation follow before target-account deployment.
 
 Antigravity's implementation UI findings were corrected and covered by an expanded browser flow. The deployment secret card timed out without a credential, so target-account mutations remain pending. Local development uses generated ignored secrets only; no token from conversation history was stored. The primary agent is continuing source cleanup and deployment packaging while the other provider reviews run.
+
+Created the public source repository https://github.com/SyedMuzamilM/analytica for the requested self-host distribution. README contains the official guided deploy-button URL with an explicit unverified-remote-install note. Publishing a template does not mark the clean-account deployment gate complete.
