@@ -14,15 +14,15 @@ This was exercised with the actual Workers Vitest integration and D1, not a mock
 
 New sites allow 1,000 accepted event envelopes per UTC day. The installation allows 2,000 total envelopes per day. Engagement updates count as events and retain receipts for idempotency. Duplicate deliveries do not charge quota. These limits are deliberately conservative and currently require an operator migration to change; a browser request cannot raise them.
 
-Local workerd D1 `meta.rows_written`, with an existing daily/summary bucket, measured:
+Current-schema workerd D1 `meta.rows_written`, with an existing daily/summary bucket, measured locally and in Linux CI:
 
 | Event case | Indexed rows written |
 | --- | --- |
-| First event in a new session | 12 |
-| Subsequent pageview | 9 |
-| Engagement receipt | 9 |
+| First event in a new session | 14 |
+| Subsequent pageview | 10 |
+| Engagement receipt | 10 |
 
-The first bucket can add more writes. Auth, reporting reads, summaries, cleanup deletes and other resources share the installation/account allowance. The previous research estimate of a cheap one-row engagement ping does not describe this implementation. These numbers are measurements of local D1 emulation; remote billing/CPU/storage evidence is still needed before promising a free supported capacity. A quota-rejected request still performs reads, so the quota is not a complete denial-of-service defense. Deployment-level throttling remains necessary for public service.
+The earlier 12/9/9 measurement preceded the visitor index and authoritative attribution updates. The first bucket can add more writes. Auth, reporting reads, summaries, cleanup deletes and other resources share the installation/account allowance. The previous research estimate of a cheap one-row engagement ping does not describe this implementation. These numbers are measurements of local D1 emulation; remote billing/CPU/storage evidence is still needed before promising a free supported capacity. A quota-rejected request still performs reads, so the quota is not a complete denial-of-service defense. Deployment-level throttling remains necessary for public service.
 
 ## Metrics and ordering
 

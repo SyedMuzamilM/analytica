@@ -8,7 +8,7 @@ Updated 26 October 2026. This file distinguishes a working local implementation 
 | Dashboard/tracker | Original React app; demo isolated from live APIs; 5 passing Chromium flows: virtual-owner setup, site creation, pageview/goal reporting consent/opt-out and canonical SPA paths | Broader browser/device coverage and accessibility review |
 | Ingestion | Insert-trigger atomic deduplication, quota/session mutations, cross-site checks, suppression and conflict fixtures | Mixed public load, distributed-abuse profile, actual storage/billing metadata |
 | Revenue | Signed webhook races, economic idempotency, partial refunds, claim trust/retry and retained snapshot tests | Real Dodo sandbox checkout metadata and delivery verification |
-| Privacy/operations | Bounded cleanup, replay journal, suppression and >2-site deletion fixtures | Off-database journal custody and a real Cloudflare restore drill |
+| Privacy/operations | Bounded cleanup, stable paginated journal export, suppression and adversarial job-order deletion fixtures | Off-database journal custody and a real Cloudflare restore drill |
 | Funnels/journeys | Session-scoped exact-step funnels, explicit caps, scoped attribution-only journeys and local fixtures | Browser editing/use tests and capacity at retained-detail ceiling |
 | Hosted deployment | Deployment-ready root configuration and dry-run build | Target-account credential, remote deploy and smoke evidence |
 | Guided self-hosting | Portable D1 binding, migration-by-binding script, fail-closed example secrets and documented owner setup | Public repository/button now prepared; clean-account install/rename/retry/update evidence remains pending |
