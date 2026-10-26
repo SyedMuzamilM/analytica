@@ -1,6 +1,6 @@
 # Analytica implementation plan
 
-Status: research complete and GPT-6.1 Sol findings incorporated. Ready to begin Phase 0 investigation, with implementation and deployment assumptions still to prove. Prepared 26 October 2026. Analytica is a working name; name and domain availability are unverified.
+Status updated 26 October 2026: the core application, original dashboard, tracker, revenue, authentication and privacy operations are implemented. The public repository and guided-deploy template exist. Remote hosted deployment, clean-account installation, capacity and restore evidence remain incomplete. See [current product inventory](current-product.md), the [selected next-work roadmap](product-roadmap.md) and [release evidence](operations/release-status.md). The phases below preserve the original planned acceptance criteria; their estimates and future-tense descriptions are historical planning context. Analytica remains a working name; name and domain availability are unverified.
 
 ## Product decision
 
@@ -8,7 +8,7 @@ Build an original analytics product for founders and small teams who want to con
 
 Use Minilytics as a feature benchmark and a source of selectively reusable MIT code. Write new UI components, navigation, visual assets, documentation, tracker namespace, and customer-facing copy. The [assessment](minilytics-assessment.md) records the source evidence and reuse obligations.
 
-This task delivers research and an executable plan. The application, public repository, hosted deployment, and working deploy button are implementation deliverables in the phases below. None exists yet.
+The original planning task produced the phases below. Implementation has since produced the application, public repository and deploy-button configuration. A working hosted URL and verified clean-account deploy-button flow remain outstanding.
 
 ## Release scope
 

@@ -50,3 +50,14 @@ All requested providers also reviewed the new implementation. Reports are pinned
 - [Corrections and verification](implementation-review-disposition.md)
 
 The corrected implementation currently passes 79 Worker/D1 tests and five Chromium flows. [Release evidence](../operations/release-status.md) records the current deployment and remote verification gaps; the earlier Phase 0 language above describes the original planning boundary.
+
+
+## Current-product gap reviews
+
+The post-implementation reviews at `80be717` assess what is needed beyond the existing feature set:
+
+- [GLM: data, lifecycle and trust](product-gaps-glm.md), completed source review.
+- [Antigravity: activation and reporting](product-gaps-antigravity.md), completed static review.
+- [DeepSeek: Cloudflare and launch](product-gaps-deepseek.md), written report recovered from a harness run interrupted before its final response.
+
+No review executed remote deployment or runtime checks. The primary agent's [inventory and dispositions](../current-product.md) and [selected roadmap](../product-roadmap.md) reconcile recommendations and correct overstatements. These documents do not claim the newly proposed work is implemented.
