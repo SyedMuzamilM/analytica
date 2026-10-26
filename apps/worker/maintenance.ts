@@ -1,5 +1,6 @@
 import type { Bindings } from "./env";
 import { localMidnight } from "./reports";
+import { pendingSiteDeletions } from "./deletion";
 
 /** Bounded scheduled work; call again to resume. No request performs an unbounded purge. */
 export async function runMaintenance(
@@ -67,12 +68,8 @@ export async function runMaintenance(
     ]);
     rebuilt++;
   }
-  const deleting = await db
-    .prepare(
-      "SELECT workspace_id,id FROM sites WHERE status='deleting' AND deletion_completed_at IS NULL LIMIT 2",
-    )
-    .all<{ workspace_id: string; id: string }>();
-  for (const site of deleting.results) {
+  const deleting = await pendingSiteDeletions(db);
+  for (const site of deleting) {
     // Keep the site tombstone until payment/identity jobs are also finished.
     await db.batch(
       [
@@ -119,7 +116,7 @@ export async function runMaintenance(
   ]);
   return {
     rebuilt,
-    deletingSites: deleting.results.length,
+    deletingSites: deleting.length,
     expiredRows: results.reduce((n, r) => n + r.meta.changes, 0),
   };
 }

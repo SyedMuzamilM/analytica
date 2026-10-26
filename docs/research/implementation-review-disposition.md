@@ -26,3 +26,9 @@ GLM Free's review is complete. It pinned commit `852c52e` because the working tr
 - Report coverage now states event/session boundary rules and warns when the earliest day can include expired detail. Auth request-write overhead remains part of remote resource measurement.
 
 DeepSeek Free's implementation/deployment review is still running. No remote deployment has occurred.
+
+## CI deletion ordering regression
+
+Linux CI exposed a remaining nondeterministic deletion deadlock. Completed-site filtering alone was insufficient: domain modules selected sites in incidental database order while the finalizer selected privacy jobs by timestamp/random journal ID. With four sites, their two-item work lists could be disjoint forever. A deterministic fixture reverses the journal order and reproduced the exact two-events-left failure locally before the fix.
+
+All domain purges now call `pendingSiteDeletions`, which uses the finalizer's timestamp/ID job order. The adversarial fixture passes after that single scheduling change. The initial possibilities were work-list mismatch, a missed domain table, or a clock boundary; the order-only change resolved the failure. No production logging or temporary probes were introduced.

@@ -281,6 +281,15 @@ describe("erasure and recovery journal", () => {
         .run();
     }
     expect(await count("privacy_journal")).toBe(4);
+    // Force finalizer ordering to oppose ordinary site scan order. Four sites
+    // are the smallest fixture whose two bounded work lists can be disjoint.
+    for (let i = 0; i < 4; i++) {
+      await env.DB.prepare(
+        "UPDATE privacy_jobs SET created_at=? WHERE site_id=?",
+      )
+        .bind(now - i * 1000, `site_privacy_00${i}`)
+        .run();
+    }
     for (let i = 0; i < 5; i++) {
       await runMaintenance(env, now);
       await cleanupRevenue(env, now);

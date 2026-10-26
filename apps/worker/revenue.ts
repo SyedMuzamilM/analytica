@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { requireAuth, requireWorkspace } from "./auth";
 import type { AppEnv, Bindings } from "./env";
+import { pendingSiteDeletions } from "./deletion";
 
 const encoder = new TextEncoder();
 const identifier = /^[a-zA-Z0-9_.:-]{1,128}$/;
@@ -779,12 +780,8 @@ revenueRoutes.get("/workspaces/:wid/sites/:sid/revenue", async (c) => {
 
 export async function cleanupRevenue(env: Bindings, now = Date.now()) {
   const db = env.DB;
-  const deleting = await db
-    .prepare(
-      "SELECT workspace_id,id FROM sites WHERE status='deleting' AND deletion_completed_at IS NULL LIMIT 2",
-    )
-    .all<{ workspace_id: string; id: string }>();
-  for (const entry of deleting.results) {
+  const deleting = await pendingSiteDeletions(db);
+  for (const entry of deleting) {
     await db.batch([
       db
         .prepare(

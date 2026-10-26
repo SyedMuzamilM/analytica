@@ -40,7 +40,7 @@ Accepted events mark a site-local date/timezone bucket dirty. Maintenance waits 
 
 Scheduled work rebuilds at most two buckets, purges at most 250 expired events and 250 sessions, and performs bounded site cleanup per invocation. Detail is deleted only after the relevant summary is clean. Retention keeps additive summaries for 396 days. The current report API intentionally exposes at most 90 days of retained detail; older summaries are retained for future additive reporting and must not be represented as an existing long-range UI feature.
 
-DELETE first commits a `deleting` site state. The collector's trigger rejects new receipts even if request code fetched an earlier enabled state. Reporting hides deleting sites. Cleanup removes owned analytics tables in batches and keeps a tiny site tombstone while other domain cleanup can finish. Parent revenue cleanup must cover money/key/integration tables separately. No foreign key may make retention delete a financial ledger.
+DELETE first commits a `deleting` site state. The collector's trigger rejects new receipts even if request code fetched an earlier enabled state. Reporting hides deleting sites. Cleanup removes owned analytics tables in batches and keeps a tiny site tombstone while other domain cleanup can finish. Every domain selects pending sites through the same job-ordered `pendingSiteDeletions` query as the finalizer, preventing disjoint bounded queues from waiting forever. Parent revenue cleanup must cover money/key/integration tables separately. No foreign key may make retention delete a financial ledger.
 
 ## Remaining release gates
 

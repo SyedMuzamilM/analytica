@@ -3,6 +3,7 @@ import type { AppEnv, Bindings } from "./env";
 import { requireAuth, requireWorkspace } from "./auth";
 import { boundedJson, safeTag, type SiteRecord } from "./analytics";
 import { resolveReportRange } from "./reports";
+import { pendingSiteDeletions } from "./deletion";
 
 const DAY = 86_400_000;
 const WINDOW = 30 * 60_000;
@@ -358,7 +359,13 @@ funnelRoutes.get(
 
 /** Called alongside other bounded deleting-site domain cleanup. */
 export async function cleanupFunnels(env: Pick<Bindings, "DB">) {
-  return env.DB.prepare(
-    "DELETE FROM funnels WHERE rowid IN(SELECT f.rowid FROM funnels f JOIN sites s ON s.workspace_id=f.workspace_id AND s.id=f.site_id WHERE s.status='deleting' AND s.deletion_completed_at IS NULL LIMIT 100)",
-  ).run();
+  const pending = await pendingSiteDeletions(env.DB);
+  if (!pending.length) return [];
+  return env.DB.batch(
+    pending.map((site) =>
+      env.DB.prepare(
+        "DELETE FROM funnels WHERE rowid IN(SELECT rowid FROM funnels WHERE workspace_id=? AND site_id=? LIMIT 100)",
+      ).bind(site.workspace_id, site.id),
+    ),
+  );
 }
