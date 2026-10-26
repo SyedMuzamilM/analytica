@@ -16,7 +16,9 @@
     "deploy": "npm run db:migrate && wrangler deploy",
     "deploy:check": "wrangler deploy --dry-run",
     "types": "wrangler types --include-runtime false",
-    "setup:local": "node scripts/setup-local.mjs"
+    "setup:local": "node scripts/setup-local.mjs",
+    "format": "prettier --write apps packages public scripts tests *.ts wrangler.jsonc package.json .github",
+    "format:check": "prettier --check apps packages public scripts tests *.ts wrangler.jsonc package.json .github"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",
@@ -34,6 +36,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "prettier": "^3.9.10",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",

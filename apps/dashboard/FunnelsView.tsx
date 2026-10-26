@@ -1,22 +1,348 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowDown, Plus, Trash2 } from 'lucide-react';
-import type { Site, Workspace } from '../../packages/contracts';
-import { api, friendlyError, post, formatNumber } from './api';
-interface Step {type:'pageview'|'goal';value:string}
-interface Funnel {id:string;name:string;steps:Step[];windowMinutes:number}
-interface Result {steps:Array<Step&{sessions:number;conversionFromPrevious:number|null}>;sessions:number;coverage?:string}
-export function FunnelsView({site,workspace,demo,period,notify}:{site:Site;workspace:Workspace;demo:boolean;period:string;notify:(s:string)=>void}) {
-  const [funnels,setFunnels]=useState<Funnel[]>([]),[selected,setSelected]=useState(''),[result,setResult]=useState<Result|null>(null);
-  const [error,setError]=useState(''),[creating,setCreating]=useState(false),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0);
-  const [steps,setSteps]=useState<Step[]>([{type:'pageview',value:'/pricing'},{type:'goal',value:'signup'}]);
-  const base=`/api/workspaces/${workspace.id}/sites/${site.id}/funnels`;
-  const eligible=site.privacyMode==='attribution';
-  useEffect(()=>{if(demo||!eligible)return;const ac=new AbortController();setError('');api<Funnel[]>(base,{signal:ac.signal}).then(list=>{setFunnels(list);setSelected(current=>list.some(f=>f.id===current)?current:list[0]?.id||'');}).catch(e=>{if(!ac.signal.aborted)setError(friendlyError(e));});return()=>ac.abort();},[base,demo,eligible,revision]);
-  useEffect(()=>{setResult(null);if(!selected||demo||!eligible)return;const ac=new AbortController();setBusy(true);setError('');api<Result>(`${base}/${selected}/report?period=${period}`,{signal:ac.signal}).then(setResult).catch(e=>{if(!ac.signal.aborted)setError(friendlyError(e));}).finally(()=>{if(!ac.signal.aborted)setBusy(false);});return()=>ac.abort();},[base,selected,period,demo,eligible,revision]);
-  async function create(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget);setBusy(true);setError('');try{const item=await post<Funnel>(base,{name:form.get('name'),steps});setSelected(item.id);setRevision(x=>x+1);setCreating(false);}catch(e){setError(friendlyError(e));}finally{setBusy(false);}}
-  if(demo||!eligible)return <section className="panel feature-empty"><h2>Follow a path from visit to action.</h2><p>{demo?'Funnels use your real, consent-enabled events. This demo does not fabricate conversion results.':'Funnels require attribution mode and explicit site consent. Aggregate measurement does not preserve a visitor journey.'}</p><p>Define 2 to 8 exact page or goal steps. Each session has 30 minutes to complete them in order.</p></section>;
-  return <div className="analysis-feature">{error&&<div role="alert" className="error-panel">{error}</div>}<div className="section-context"><div><h2>From first step to completion</h2><p>Ordered steps in one session. A 30-minute completion window.</p></div>{workspace.role!=='viewer'&&<button className="button secondary" onClick={()=>setCreating(x=>!x)}><Plus size={15}/>Create funnel</button>}</div>
-  {creating&&<section className="panel feature-form"><h2>Define a funnel</h2><form onSubmit={create}><label>Funnel name<input name="name" required maxLength={100} placeholder="Pricing to signup"/></label>{steps.map((step,i)=><div className="funnel-step-editor" key={i}><span>{i+1}</span><label>Step type<select aria-label={`Step ${i+1} type`} value={step.type} onChange={e=>setSteps(old=>old.map((s,j)=>i===j?{...s,type:e.target.value as Step['type']}:s))}><option value="pageview">Page visited</option><option value="goal">Goal completed</option></select></label><label>Exact value<input aria-label={`Step ${i+1} value`} value={step.value} required maxLength={500} onChange={e=>setSteps(old=>old.map((s,j)=>i===j?{...s,value:e.target.value}:s))}/></label>{steps.length>2&&<button type="button" className="icon-button" aria-label={`Remove step ${i+1}`} onClick={()=>setSteps(s=>s.filter((_,j)=>j!==i))}><Trash2 size={16}/></button>}</div>)}<div className="inline-actions">{steps.length<8&&<button type="button" className="button secondary" onClick={()=>setSteps(s=>[...s,{type:'goal',value:''}])}>Add step</button>}<button disabled={busy} className="button primary">Save funnel</button><button type="button" className="text-button" onClick={()=>setCreating(false)}>Cancel</button></div></form></section>}
-  {!!funnels.length&&<section className="panel feature-form"><div className="feature-select"><label>Funnel<select value={selected} onChange={e=>setSelected(e.target.value)}>{funnels.map(f=><option value={f.id} key={f.id}>{f.name}</option>)}</select></label>{workspace.role!=='viewer'&&<button className="text-button" onClick={async()=>{if(!confirm('Delete this funnel definition? Your events will be kept.'))return;try{await api(`${base}/${selected}`,{method:'DELETE'});setRevision(x=>x+1);notify('Funnel deleted.');}catch(e){setError(friendlyError(e));}}}>Delete funnel</button>}</div>{busy&&<p role="status">Calculating your funnel…</p>}{result&&<div className="funnel-results">{result.steps.map((step,i)=><div key={i} className="funnel-result"><div><span className="step-number">{i+1}</span><strong>{step.value}</strong><span>{step.type==='goal'?'Goal':'Page'}</span></div><div className="funnel-progress"><span style={{width:`${result.steps[0].sessions?step.sessions/result.steps[0].sessions*100:0}%`}}/></div><div><strong>{formatNumber(step.sessions)} sessions</strong><span>{i===0?'Started the funnel':`${Math.round((step.conversionFromPrevious||0)*100)}% of previous step`}</span></div>{i<result.steps.length-1&&<ArrowDown size={14}/>}</div>)}</div>}{result?.coverage&&<p className="coverage-warning">{result.coverage}</p>}</section>}
-  {!funnels.length&&!creating&&<section className="panel feature-empty"><h2>No funnels yet.</h2><p>Choose a path you want visitors to complete, then add exact page paths and goal names.</p></section>}</div>;
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowDown, Plus, Trash2 } from "lucide-react";
+import type { Site, Workspace } from "../../packages/contracts";
+import { api, friendlyError, post, formatNumber } from "./api";
+interface Step {
+  type: "pageview" | "goal";
+  value: string;
+}
+interface Funnel {
+  id: string;
+  name: string;
+  steps: Step[];
+  windowMinutes: number;
+}
+interface Result {
+  steps: Array<
+    Step & { sessions: number; conversionFromPrevious: number | null }
+  >;
+  sessions: number;
+  coverage?: string;
+}
+export function FunnelsView({
+  site,
+  workspace,
+  demo,
+  period,
+  notify,
+}: {
+  site: Site;
+  workspace: Workspace;
+  demo: boolean;
+  period: string;
+  notify: (s: string) => void;
+}) {
+  const [funnels, setFunnels] = useState<Funnel[]>([]),
+    [selected, setSelected] = useState(""),
+    [result, setResult] = useState<Result | null>(null);
+  const [error, setError] = useState(""),
+    [creating, setCreating] = useState(false),
+    [busy, setBusy] = useState(false),
+    [revision, setRevision] = useState(0);
+  const [steps, setSteps] = useState<Step[]>([
+    { type: "pageview", value: "/pricing" },
+    { type: "goal", value: "signup" },
+  ]);
+  const base = `/api/workspaces/${workspace.id}/sites/${site.id}/funnels`;
+  const eligible = site.privacyMode === "attribution";
+  useEffect(() => {
+    if (demo || !eligible) return;
+    const ac = new AbortController();
+    setError("");
+    api<Funnel[]>(base, { signal: ac.signal })
+      .then((list) => {
+        setFunnels(list);
+        setSelected((current) =>
+          list.some((f) => f.id === current) ? current : list[0]?.id || "",
+        );
+      })
+      .catch((e) => {
+        if (!ac.signal.aborted) setError(friendlyError(e));
+      });
+    return () => ac.abort();
+  }, [base, demo, eligible, revision]);
+  useEffect(() => {
+    setResult(null);
+    if (!selected || demo || !eligible) return;
+    const ac = new AbortController();
+    setBusy(true);
+    setError("");
+    api<Result>(`${base}/${selected}/report?period=${period}`, {
+      signal: ac.signal,
+    })
+      .then(setResult)
+      .catch((e) => {
+        if (!ac.signal.aborted) setError(friendlyError(e));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setBusy(false);
+      });
+    return () => ac.abort();
+  }, [base, selected, period, demo, eligible, revision]);
+  async function create(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    setBusy(true);
+    setError("");
+    try {
+      const normalized = steps.map((step) => ({
+        ...step,
+        value: step.value.trim(),
+      }));
+      if (
+        normalized.some(
+          (step) =>
+            step.type === "pageview" &&
+            (!step.value.startsWith("/") || /[?#]/.test(step.value)),
+        )
+      )
+        throw new Error(
+          "Page steps must start with / and contain no query string or fragment.",
+        );
+      const item = await post<Funnel>(base, {
+        name: form.get("name"),
+        steps: normalized,
+      });
+      setSelected(item.id);
+      setRevision((x) => x + 1);
+      setCreating(false);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (demo || !eligible)
+    return (
+      <section className="panel feature-empty">
+        <h2>Follow a path from visit to action.</h2>
+        <p>
+          {demo
+            ? "Funnels use your real, consent-enabled events. This demo does not fabricate conversion results."
+            : "Funnels require attribution mode and explicit site consent. Aggregate measurement does not preserve a visitor journey."}
+        </p>
+        <p>
+          Define 2 to 8 exact page or goal steps. Each session has 30 minutes to
+          complete them in order.
+        </p>
+      </section>
+    );
+  return (
+    <div className="analysis-feature">
+      {error && (
+        <div role="alert" className="error-panel">
+          {error}
+        </div>
+      )}
+      <div className="section-context">
+        <div>
+          <h2>From first step to completion</h2>
+          <p>Ordered steps in one session. A 30-minute completion window.</p>
+        </div>
+        {workspace.role !== "viewer" && (
+          <button
+            className="button secondary"
+            onClick={() => setCreating((x) => !x)}
+          >
+            <Plus size={15} />
+            Create funnel
+          </button>
+        )}
+      </div>
+      {creating && (
+        <section className="panel feature-form">
+          <h2>Define a funnel</h2>
+          <form onSubmit={create}>
+            <label>
+              Funnel name
+              <input
+                name="name"
+                required
+                maxLength={100}
+                placeholder="Pricing to signup"
+              />
+            </label>
+            {steps.map((step, i) => (
+              <div className="funnel-step-editor" key={i}>
+                <span>{i + 1}</span>
+                <label>
+                  Step type
+                  <select
+                    aria-label={`Step ${i + 1} type`}
+                    value={step.type}
+                    onChange={(e) =>
+                      setSteps((old) =>
+                        old.map((s, j) =>
+                          i === j
+                            ? { ...s, type: e.target.value as Step["type"] }
+                            : s,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="pageview">Page visited</option>
+                    <option value="goal">Goal completed</option>
+                  </select>
+                </label>
+                <label>
+                  Exact value
+                  <input
+                    aria-label={`Step ${i + 1} value`}
+                    value={step.value}
+                    required
+                    placeholder={
+                      step.type === "pageview" ? "/pricing" : "signup"
+                    }
+                    maxLength={500}
+                    onChange={(e) =>
+                      setSteps((old) =>
+                        old.map((s, j) =>
+                          i === j ? { ...s, value: e.target.value } : s,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                {steps.length > 2 && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remove step ${i + 1}`}
+                    onClick={() => setSteps((s) => s.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="inline-actions">
+              {steps.length < 8 && (
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() =>
+                    setSteps((s) => [...s, { type: "goal", value: "" }])
+                  }
+                >
+                  Add step
+                </button>
+              )}
+              <button disabled={busy} className="button primary">
+                Save funnel
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setCreating(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+      {!!funnels.length && (
+        <section className="panel feature-form">
+          <div className="feature-select">
+            <label>
+              Funnel
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+              >
+                {funnels.map((f) => (
+                  <option value={f.id} key={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {workspace.role !== "viewer" && (
+              <button
+                className="text-button"
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      "Delete this funnel definition? Your events will be kept.",
+                    )
+                  )
+                    return;
+                  try {
+                    await api(`${base}/${selected}`, { method: "DELETE" });
+                    setSelected("");
+                    setResult(null);
+                    setError("");
+                    setFunnels((current) =>
+                      current.filter((item) => item.id !== selected),
+                    );
+                    setRevision((x) => x + 1);
+                    notify("Funnel deleted.");
+                  } catch (e) {
+                    setError(friendlyError(e));
+                  }
+                }}
+              >
+                Delete funnel
+              </button>
+            )}
+          </div>
+          {busy && <p role="status">Calculating your funnel…</p>}
+          {result && (
+            <div className="funnel-results">
+              {result.steps.map((step, i) => (
+                <div key={i} className="funnel-result">
+                  <div>
+                    <span className="step-number">{i + 1}</span>
+                    <strong>{step.value}</strong>
+                    <span>{step.type === "goal" ? "Goal" : "Page"}</span>
+                  </div>
+                  <div
+                    className="funnel-progress"
+                    role="progressbar"
+                    aria-label={`${step.value}: sessions reaching this step`}
+                    aria-valuenow={
+                      result.steps[0].sessions
+                        ? Math.round(
+                            (step.sessions / result.steps[0].sessions) * 100,
+                          )
+                        : 0
+                    }
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <span
+                      style={{
+                        width: `${result.steps[0].sessions ? (step.sessions / result.steps[0].sessions) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <strong>{formatNumber(step.sessions)} sessions</strong>
+                    <span>
+                      {i === 0
+                        ? "Started the funnel"
+                        : `${Math.round((step.conversionFromPrevious || 0) * 100)}% of previous step`}
+                    </span>
+                  </div>
+                  {i < result.steps.length - 1 && <ArrowDown size={14} />}
+                </div>
+              ))}
+            </div>
+          )}
+          {result?.coverage && (
+            <p className="coverage-warning">{result.coverage}</p>
+          )}
+        </section>
+      )}
+      {!funnels.length && !creating && (
+        <section className="panel feature-empty">
+          <h2>No funnels yet.</h2>
+          <p>
+            Choose a path you want visitors to complete, then add exact page
+            paths and goal names.
+          </p>
+        </section>
+      )}
+    </div>
+  );
 }

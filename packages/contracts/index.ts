@@ -1,7 +1,14 @@
-export type PrivacyMode = 'aggregate' | 'attribution';
-export type Role = 'owner' | 'admin' | 'viewer';
-export interface Workspace { id: string; name: string; role: Role }
-export interface User { id: string; name: string }
+export type PrivacyMode = "aggregate" | "attribution";
+export type Role = "owner" | "admin" | "viewer";
+export interface Workspace {
+  id: string;
+  name: string;
+  role: Role;
+}
+export interface User {
+  id: string;
+  name: string;
+}
 export interface AuthStatus {
   configured: boolean;
   authenticated: boolean;
@@ -17,7 +24,7 @@ export interface Site {
   domain: string;
   timezone: string;
   privacyMode: PrivacyMode;
-  status: 'active' | 'paused' | 'deleting';
+  status: "active" | "paused" | "deleting";
   createdAt: number;
   dailyLimit: number;
 }
@@ -29,8 +36,18 @@ export interface MetricSet {
   bounceRate: number;
   avgDuration: number;
 }
-export interface BreakdownRow { name: string; count: number; visitors?: number; revenue?: number }
-export interface SeriesPoint { date: string; pageviews: number; sessions: number; goals: number }
+export interface BreakdownRow {
+  name: string;
+  count: number;
+  visitors?: number;
+  revenue?: number;
+}
+export interface SeriesPoint {
+  date: string;
+  pageviews: number;
+  sessions: number;
+  goals: number;
+}
 export interface AnalyticsReport {
   range: { from: number; to: number; timezone: string; label: string };
   current: MetricSet;
@@ -50,7 +67,7 @@ export interface CollectEvent {
   version: 1;
   id: string;
   siteId: string;
-  type: 'pageview' | 'goal' | 'outbound' | 'engagement';
+  type: "pageview" | "goal" | "outbound" | "engagement";
   timestamp: number;
   sequence: number;
   visitorId: string;

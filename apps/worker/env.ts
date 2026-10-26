@@ -1,4 +1,4 @@
-import type { Workspace } from '../../packages/contracts';
+import type { Workspace } from "../../packages/contracts";
 
 export interface Bindings {
   DB: D1Database;
@@ -8,7 +8,16 @@ export interface Bindings {
   APP_ORIGIN?: string;
   MODE?: string;
   RESTORE_LOCK?: string;
-  EDGE_RATE_LIMIT?: { limit(input: { key: string }): Promise<{ success: boolean }> };
+  EDGE_RATE_LIMIT?: {
+    limit(input: { key: string }): Promise<{ success: boolean }>;
+  };
 }
-export interface Principal { userId: string; name: string; sessionId: string }
-export type AppEnv = { Bindings: Bindings; Variables: { principal: Principal; workspace: Workspace } };
+export interface Principal {
+  userId: string;
+  name: string;
+  sessionId: string;
+}
+export type AppEnv = {
+  Bindings: Bindings;
+  Variables: { principal: Principal; workspace: Workspace };
+};
