@@ -4,8 +4,8 @@ Updated 26 October 2026. This file distinguishes a working local implementation 
 
 | Area | Current evidence | Remaining check |
 | --- | --- | --- |
-| Worker/D1/auth | Actual workerd integration tests with concurrent SQL and cryptographic WebAuthn, no mocked database | Remote CPU, supported-device sign-in and custom-domain RP policy |
-| Dashboard/tracker | Original React app; demo isolated from live APIs; Chromium virtual-owner setup, site create, pageview/goal reporting and consent/opt-out tests | Broader browser/device coverage and accessibility review |
+| Worker/D1/auth | 54 passing workerd integration tests with concurrent SQL and cryptographic WebAuthn, no mocked database | Remote CPU, supported-device sign-in and custom-domain RP policy |
+| Dashboard/tracker | Original React app; demo isolated from live APIs; 4 passing Chromium flows: virtual-owner setup, site creation, pageview/goal reporting and consent/opt-out | Broader browser/device coverage and accessibility review |
 | Ingestion | Insert-trigger atomic deduplication, quota/session mutations, cross-site checks, suppression and conflict fixtures | Mixed public load, distributed-abuse profile, actual storage/billing metadata |
 | Revenue | Signed webhook races, economic idempotency, partial refunds, claim trust/retry and retained snapshot tests | Real Dodo sandbox checkout metadata and delivery verification |
 | Privacy/operations | Bounded cleanup, replay journal, suppression and >2-site deletion fixtures | Off-database journal custody and a real Cloudflare restore drill |
