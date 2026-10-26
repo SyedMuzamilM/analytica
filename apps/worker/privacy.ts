@@ -227,6 +227,22 @@ privacyRoutes.post("/workspaces/:wid/sites/:sid/erasure", async (c) => {
     .bind(workspaceId, siteId)
     .first();
   if (!site) return c.json({ error: "site_not_found" }, 404);
+  const evidence = await c.env.DB.prepare(
+    `SELECT 1 WHERE
+    EXISTS(SELECT 1 FROM visitor_suppressions WHERE workspace_id=? AND site_id=? AND visitor_id=?) OR
+    EXISTS(SELECT 1 FROM analytics_events WHERE workspace_id=? AND site_id=? AND visitor_id=?) OR
+    EXISTS(SELECT 1 FROM analytics_sessions WHERE workspace_id=? AND site_id=? AND visitor_id=?) OR
+    EXISTS(SELECT 1 FROM checkout_claims WHERE workspace_id=? AND site_id=? AND visitor_id=?)`,
+  )
+    .bind(
+      ...Array.from({ length: 4 }, () => [
+        workspaceId,
+        siteId,
+        body.visitorId,
+      ]).flat(),
+    )
+    .first();
+  if (!evidence) return c.json({ error: "visitor_not_found" }, 404);
   const now = Date.now();
   const job = await scheduleVisitorErasure(
     c.env.DB,
@@ -251,20 +267,41 @@ privacyRoutes.get(
   "/workspaces/:wid/deletion-journal",
   requireWorkspace("owner"),
   async (c) => {
+    const limit = Number(c.req.query("limit") || 1000);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+      return c.json({ error: "invalid_journal_limit" }, 400);
+    const cursor = c.req.query("cursor");
+    let through: number,
+      after = 0;
+    if (cursor) {
+      if (!/^\d{1,16}:\d{1,16}$/.test(cursor))
+        return c.json({ error: "invalid_journal_cursor" }, 400);
+      [through, after] = cursor.split(":").map(Number);
+      if (
+        ![through, after].every(
+          (value) => Number.isSafeInteger(value) && value >= 0,
+        ) ||
+        after > through
+      )
+        return c.json({ error: "invalid_journal_cursor" }, 400);
+    } else {
+      through =
+        (await c.env.DB.prepare(
+          "SELECT COALESCE(MAX(rowid),0) n FROM privacy_journal WHERE workspace_id=?",
+        )
+          .bind(c.get("workspace").id)
+          .first<number>("n")) || 0;
+    }
     const records = await c.env.DB.prepare(
-      "SELECT * FROM privacy_journal WHERE workspace_id=? ORDER BY created_at,id LIMIT 1001",
+      "SELECT rowid AS export_sequence,* FROM privacy_journal WHERE workspace_id=? AND rowid>? AND rowid<=? ORDER BY rowid LIMIT ?",
     )
-      .bind(c.get("workspace").id)
-      .all<JournalRow>();
-    if (records.results.length > 1000)
-      return c.json(
-        {
-          error: "journal_export_too_large",
-          message:
-            "Use the operator D1 export procedure for this workspace journal.",
-        },
-        413,
-      );
+      .bind(c.get("workspace").id, after, through, limit + 1)
+      .all<JournalRow & { export_sequence: number }>();
+    const hasMore = records.results.length > limit;
+    const page = records.results.slice(0, limit);
+    const nextCursor = hasMore
+      ? `${through}:${page[page.length - 1].export_sequence}`
+      : null;
     c.header("Cache-Control", "private, no-store");
     c.header(
       "Content-Disposition",
@@ -274,7 +311,9 @@ privacyRoutes.get(
       version: 1,
       workspaceId: c.get("workspace").id,
       exportedAt: new Date().toISOString(),
-      records: records.results.map(serialize),
+      records: page.map(serialize),
+      nextCursor,
+      complete: !hasMore,
     });
   },
 );

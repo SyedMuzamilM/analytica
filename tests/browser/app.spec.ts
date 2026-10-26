@@ -322,3 +322,42 @@ test("attribution mode waits for explicit consent and removes cookies on withdra
   await page.evaluate(() => (window as any).analytica("goal", "withdrawn"));
   expect(events).toHaveLength(1);
 });
+
+test("canonical trailing-slash navigation is deduplicated without collapsing redacted SPA routes", async ({
+  context,
+}) => {
+  for (const redact of [false, true]) {
+    const page = await context.newPage();
+    const events: Array<{ type: string; path: string }> = [];
+    await page.route("**/v1/collect", async (route) => {
+      events.push(JSON.parse(route.request().postData() || "{}"));
+      await route.fulfill({ status: 202, body: "{}" });
+    });
+    await page.route("**/canonical-docs", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><title>Canonical path fixture</title><script defer data-site="canonical_site_1" ${redact ? "data-redact-path" : ""} data-allow-localhost data-allow-automation src="/tracker.js"></script>`,
+      }),
+    );
+    await page.goto("/canonical-docs");
+    await expect
+      .poll(() => events.filter((e) => e.type === "pageview").length)
+      .toBe(1);
+    await page.evaluate(async () => {
+      history.pushState({}, "", "/canonical-docs/");
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      history.pushState({}, "", "/canonical-checkout");
+    });
+    await expect
+      .poll(() => events.filter((e) => e.type === "pageview").length)
+      .toBe(2);
+    expect(
+      events.filter((e) => e.type === "pageview").map((e) => e.path),
+    ).toEqual(
+      redact
+        ? ["/[redacted]", "/[redacted]"]
+        : ["/canonical-docs", "/canonical-checkout"],
+    );
+    await page.close();
+  }
+});

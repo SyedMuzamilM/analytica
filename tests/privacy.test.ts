@@ -407,3 +407,77 @@ describe("erasure and recovery journal", () => {
     expect(await count("visitor_suppressions")).toBe(1);
   });
 });
+
+it("does not create permanent erasure state for an unknown visitor, while repeated real erasure remains idempotent", async () => {
+  const cookie = await owner();
+  await site();
+  const unknown = await request(`/sites/${siteId}/erasure`, cookie, {
+    visitorId: "never_seen_visitor",
+  });
+  expect(unknown.status).toBe(404);
+  for (const table of [
+    "visitor_suppressions",
+    "privacy_journal",
+    "privacy_jobs",
+  ])
+    expect(await count(table)).toBe(0);
+  await eventStatement().run();
+  expect(
+    (await request(`/sites/${siteId}/erasure`, cookie, { visitorId })).status,
+  ).toBe(202);
+  expect(
+    (await request(`/sites/${siteId}/erasure`, cookie, { visitorId })).status,
+  ).toBe(202);
+  expect(await count("privacy_journal")).toBe(1);
+});
+
+it("exports journals beyond 1000 records in stable pages without including later additions", async () => {
+  const cookie = await owner();
+  await site();
+  for (let offset = 0; offset < 1005; offset += 100) {
+    await env.DB.batch(
+      Array.from({ length: Math.min(100, 1005 - offset) }, (_, i) =>
+        env.DB.prepare(
+          "INSERT INTO privacy_journal(id,workspace_id,site_id,kind,subject_id,created_at) VALUES(?,?,?,'visitor',?,?)",
+        ).bind(
+          `journal_paged_${offset + i}`,
+          workspaceId,
+          siteId,
+          `visitor_paged_${offset + i}`,
+          now,
+        ),
+      ),
+    );
+  }
+  const first = await request("/deletion-journal", cookie);
+  expect(first.status).toBe(200);
+  const page1 = (await first.json()) as {
+    records: Array<{ id: string }>;
+    nextCursor: string;
+    complete: boolean;
+  };
+  expect(page1.records).toHaveLength(1000);
+  expect(page1.complete).toBe(false);
+  await env.DB.prepare(
+    "INSERT INTO privacy_journal(id,workspace_id,site_id,kind,subject_id,created_at) VALUES(?,?,?,'visitor',?,?)",
+  )
+    .bind("journal_later", workspaceId, siteId, "visitor_later", now)
+    .run();
+  const page2 = (await request(
+    `/deletion-journal?cursor=${encodeURIComponent(page1.nextCursor)}`,
+    cookie,
+  ).then((r) => r.json())) as {
+    records: Array<{ id: string }>;
+    nextCursor: null;
+    complete: boolean;
+  };
+  expect(page2.records).toHaveLength(5);
+  expect(page2.complete).toBe(true);
+  expect(page2.nextCursor).toBeNull();
+  const all = [...page1.records, ...page2.records];
+  expect(new Set(all.map((r) => r.id)).size).toBe(1005);
+  expect(all.some((r) => r.id === "journal_later")).toBe(false);
+  expect(
+    (await request("/deletion-journal?cursor=invalid", cookie)).status,
+  ).toBe(400);
+});

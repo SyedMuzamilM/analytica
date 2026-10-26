@@ -148,21 +148,29 @@ revenueRoutes.post(
     if ((count?.n || 0) >= 10) return c.json({ error: "key_limit" }, 409);
     const token = "an_" + randomToken(),
       id = crypto.randomUUID();
-    await c.env.DB.prepare(
-      "INSERT INTO site_api_keys(id,workspace_id,site_id,name,token_hash,prefix,namespace,integration_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-    )
-      .bind(
-        id,
-        c.req.param("wid"),
-        c.req.param("sid"),
-        body.name.trim(),
-        await digest(token),
-        token.slice(0, 11),
-        namespace,
-        integrationId,
-        Date.now(),
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO site_api_keys(id,workspace_id,site_id,name,token_hash,prefix,namespace,integration_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
       )
-      .run();
+        .bind(
+          id,
+          c.req.param("wid"),
+          c.req.param("sid"),
+          body.name.trim(),
+          await digest(token),
+          token.slice(0, 11),
+          namespace,
+          integrationId,
+          Date.now(),
+        )
+        .run();
+    } catch (error) {
+      if (String(error).includes("key_limit"))
+        return c.json({ error: "key_limit" }, 409);
+      if (/site_inactive|integration_unavailable/.test(String(error)))
+        return c.json({ error: "key_configuration_changed" }, 409);
+      throw error;
+    }
     return c.json({ id, token, namespace }, 201);
   },
 );
@@ -470,19 +478,14 @@ for (const [path, kind] of [
       return c.json(await recordMoney(c.env, key, input), 201);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "";
-      if (
-        /idempotency_conflict|invalid_refund|invalid_claim|site_inactive|key_revoked/.test(
-          reason,
-        )
-      )
-        return c.json(
-          {
-            error: reason.includes("invalid_refund")
-              ? "invalid_refund"
-              : reason,
-          },
-          409,
-        );
+      const code = [
+        "idempotency_conflict",
+        "invalid_refund",
+        "invalid_claim",
+        "key_revoked_or_site_inactive",
+        "site_inactive",
+      ].find((value) => reason.includes(value));
+      if (code) return c.json({ error: code }, 409);
       throw error;
     }
   });
@@ -498,7 +501,9 @@ moneyRoutes.post("/server/checkouts", async (c) => {
     typeof body.checkout_id !== "string" ||
     !identifier.test(body.checkout_id) ||
     typeof body.visitor_id !== "string" ||
-    typeof body.session_id !== "string"
+    !/^[A-Za-z0-9_-]{8,80}$/.test(body.visitor_id) ||
+    typeof body.session_id !== "string" ||
+    !/^[A-Za-z0-9_-]{8,80}$/.test(body.session_id)
   )
     return c.json({ error: "invalid_checkout" }, 400);
   const session = await c.env.DB.prepare(
@@ -611,9 +616,9 @@ async function verifyWebhook(
 }
 moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
   const integration = await c.env.DB.prepare(
-    "SELECT i.*,s.privacy_mode FROM payment_integrations i JOIN sites s ON s.workspace_id=i.workspace_id AND s.id=i.site_id WHERE i.id=? AND i.disabled_at IS NULL AND s.status=?",
+    "SELECT i.*,s.privacy_mode,s.status AS site_status FROM payment_integrations i JOIN sites s ON s.workspace_id=i.workspace_id AND s.id=i.site_id WHERE i.id=? AND i.disabled_at IS NULL",
   )
-    .bind(c.req.param("integrationId"), "active")
+    .bind(c.req.param("integrationId"))
     .first<Record<string, unknown>>();
   if (!integration) return c.json({ error: "integration_not_found" }, 404);
   if (!validSecret(c.env.APP_SECRET))
@@ -632,6 +637,12 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
     ))
   )
     return c.json({ error: "invalid_signature" }, 401);
+  if (integration.site_status === "deleting")
+    return c.json({ error: "site_deleted" }, 410);
+  if (integration.site_status === "paused") {
+    c.header("Retry-After", "60");
+    return c.json({ error: "site_paused" }, 503);
+  }
   const fingerprint = await digest(raw);
   const previous = await c.env.DB.prepare(
     "SELECT digest FROM payment_receipts WHERE integration_id=? AND event_id=?",
@@ -687,6 +698,23 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
     return c.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if (/site_inactive|key_revoked_or_site_inactive/.test(message)) {
+      const status = await c.env.DB.prepare(
+        "SELECT status FROM sites WHERE workspace_id=? AND id=?",
+      )
+        .bind(key.workspace_id, key.site_id)
+        .first<string>("status");
+      if (!status || status === "deleting")
+        return c.json({ error: "site_deleted" }, 410);
+      c.header("Retry-After", "60");
+      return c.json(
+        {
+          error:
+            status === "paused" ? "site_paused" : "integration_unavailable",
+        },
+        503,
+      );
+    }
     if (
       /idempotency_conflict|invalid_refund|invalid_claim|webhook_id_conflict/.test(
         message,

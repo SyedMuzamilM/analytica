@@ -347,3 +347,131 @@ it("keeps an original acquisition snapshot while a recent refund still depends o
     source: "Newsletter",
   });
 });
+
+it("classifies paused and deleting webhook intake and handles a pause between lookup and write", async () => {
+  await seed();
+  const secretBytes = encoder.encode("test-only-paused-webhook-signing-key");
+  const encryptionKey = await crypto.subtle.importKey(
+    "raw",
+    await crypto.subtle.digest("SHA-256", encoder.encode(env.APP_SECRET)),
+    "AES-GCM",
+    false,
+    ["encrypt"],
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    encryptionKey,
+    encoder.encode(`whsec_${b64(secretBytes)}`),
+  );
+  await env.DB.prepare(
+    "INSERT INTO payment_integrations(id,workspace_id,site_id,provider,merchant_id,secret_ciphertext,created_at) VALUES(?,?,?,?,?,?,?)",
+  )
+    .bind(
+      "integration_paused",
+      key.workspace_id,
+      key.site_id,
+      "dodo",
+      "merchant_paused",
+      `v1.${b64(iv)}.${b64(new Uint8Array(ciphertext))}`,
+      Date.now(),
+    )
+    .run();
+  const body = JSON.stringify({
+    type: "payment.succeeded",
+    data: {
+      payment_id: "sale_paused",
+      total_amount: 1500,
+      currency: "USD",
+      created_at: new Date().toISOString(),
+    },
+  });
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signingKey = await crypto.subtle.importKey(
+    "raw",
+    secretBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = b64(
+    new Uint8Array(
+      await crypto.subtle.sign(
+        "HMAC",
+        signingKey,
+        encoder.encode(`paused_delivery.${timestamp}.${body}`),
+      ),
+    ),
+  );
+  const send = (bindings: typeof env = env) =>
+    app.request(
+      `${origin}/v1/webhooks/dodo/integration_paused`,
+      {
+        method: "POST",
+        headers: {
+          "webhook-id": "paused_delivery",
+          "webhook-timestamp": timestamp,
+          "webhook-signature": `v1,${signature}`,
+        },
+        body,
+      },
+      bindings,
+    );
+  await env.DB.prepare("UPDATE sites SET status='paused' WHERE id=?")
+    .bind(key.site_id)
+    .run();
+  const paused = await send();
+  expect(paused.status).toBe(503);
+  expect(paused.headers.get("Retry-After")).toBe("60");
+  expect(await paused.json()).toEqual({ error: "site_paused" });
+  expect(
+    await env.DB.prepare("SELECT COUNT(*) n FROM money_records").first("n"),
+  ).toBe(0);
+  await env.DB.prepare("UPDATE sites SET status='active' WHERE id=?")
+    .bind(key.site_id)
+    .run();
+  // Interpose a real competing write after the route's actual integration read.
+  // Every query and mutation still runs against D1; no SQL result is mocked.
+  const racingDb = new Proxy(env.DB, {
+    get(target, property) {
+      if (property === "prepare")
+        return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (
+            sql.startsWith("SELECT i.*,s.privacy_mode,s.status AS site_status")
+          )
+            return {
+              bind: (...args: unknown[]) => {
+                const bound = statement.bind(...args);
+                return {
+                  first: async () => {
+                    const read = await bound.first();
+                    await env.DB.prepare(
+                      "UPDATE sites SET status='paused' WHERE id=?",
+                    )
+                      .bind(key.site_id)
+                      .run();
+                    return read;
+                  },
+                };
+              },
+            };
+          return statement;
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as D1Database;
+  const raced = await send({ ...env, DB: racingDb });
+  expect(raced.status).toBe(503);
+  expect(await raced.json()).toEqual({ error: "site_paused" });
+  expect(
+    await env.DB.prepare("SELECT COUNT(*) n FROM money_records").first("n"),
+  ).toBe(0);
+  await env.DB.prepare("UPDATE sites SET status='deleting' WHERE id=?")
+    .bind(key.site_id)
+    .run();
+  const deleted = await send();
+  expect(deleted.status).toBe(410);
+  expect(await deleted.json()).toEqual({ error: "site_deleted" });
+});

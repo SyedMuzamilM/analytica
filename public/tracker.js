@@ -216,7 +216,7 @@
   }
   function pageview(force) {
     if (!enabled()) return;
-    var current = location.pathname;
+    var current = location.pathname.replace(/\/+$/, "") || "/";
     if (!force && lastPage === current) return;
     flushTime();
     var extra = first ? { referrer: referrer(), campaign: campaign() } : {};

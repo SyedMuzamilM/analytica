@@ -285,6 +285,10 @@ export async function buildReport(
     lastEventAt: (last.results[0] as { ts: number | null })?.ts || null,
     privacyMode: site.privacy_mode,
     coverage:
+      (range.from < now - 90 * DAY
+        ? "The earliest day may contain expired detail. "
+        : "") +
+      "Pageviews use event dates; sessions count starts in this period. " +
       (range.previousFrom < now - 90 * DAY
         ? "Previous-period comparison may be incomplete because detail expires after 90 days. "
         : "") +

@@ -228,3 +228,37 @@ describe("economic idempotency and tenant-bound money", () => {
     ).toBe(0);
   });
 });
+
+it("admits no more than ten active server keys under concurrent creation", async () => {
+  await setup();
+  const attempts = Array.from({ length: 15 }, (_, i) =>
+    env.DB.prepare(
+      "INSERT INTO site_api_keys(id,workspace_id,site_id,name,token_hash,prefix,namespace,created_at) VALUES(?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        `concurrent_key_${i}`,
+        "ws_revenue",
+        "site_revenue",
+        "Key",
+        `unique_hash_${i}`,
+        "an_key",
+        "api:shop",
+        now,
+      )
+      .run(),
+  );
+  const results = await Promise.allSettled(attempts);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(9);
+  expect(
+    await env.DB.prepare(
+      "SELECT COUNT(*) n FROM site_api_keys WHERE revoked_at IS NULL",
+    ).first("n"),
+  ).toBe(10);
+  expect(
+    results
+      .filter((r) => r.status === "rejected")
+      .every((r) =>
+        String((r as PromiseRejectedResult).reason).includes("key_limit"),
+      ),
+  ).toBe(true);
+});
