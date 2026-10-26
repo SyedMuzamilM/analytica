@@ -6,7 +6,7 @@ Run all local checks in README before deploying. The app is an early implementat
 
 Use the repository-root Deploy to Cloudflare flow after publication. Cloudflare should copy the repository, provision D1, prompt for secrets, build the dashboard and run migrations/deploy. Normal setup must require no terminal or database-ID editing. A clean-account button installation, a resource rename, safe secret defaults, migration permissions, retry and upgrade still require a recorded real test.
 
-Set two different high-entropy runtime secrets: APP_SECRET and SETUP_TOKEN. Never accept the example values. Generate them with a password manager or a trusted local cryptographic generator and enter them in Cloudflare's private secret fields. No automatic secret-generation behavior is assumed. Open the deployed URL, enter the setup token, register the owner passkey and save its recovery codes. Another visitor cannot claim an unconfigured installation without the private token.
+Set two different high-entropy runtime secrets: APP_SECRET and SETUP_TOKEN. Never accept the example values. Generate them with a password manager or a trusted local cryptographic generator and enter them in Cloudflare's private secret fields. No automatic secret-generation behavior is assumed. Open the deployed URL, enter the setup token, register the owner passkey and save its recovery codes. Another visitor cannot claim an unconfigured installation without the private token. After owner setup succeeds, SETUP_TOKEN can be deleted without affecting sign-in; APP_SECRET remains required. Owner setup stays closed.
 
 The initial passkey relying party is the installation hostname. Choose the final custom domain before enrolling production users. A passkey registered for a workers.dev hostname will not automatically work on an unrelated custom domain. Keep a working origin/recovery route during any domain migration, and test replacement credentials before removing the old hostname.
 
@@ -41,4 +41,4 @@ Commit every schema change as a new forward migration after a release exists. Ed
 
 Apply compatible additive migrations, deploy the new Worker, check `/healthz`, passkey sign-in, first event/report, money intake and maintenance. Test a second deploy and update without recreating owner/data. Roll back Worker code only to versions compatible with the current schema. Use forward fixes for schema changes; use D1 Time Travel as an incident recovery operation with its data-loss consequences.
 
-Follow [data recovery](data-recovery.md) for restore locking, external deletion journals, replay, session/key revocations and release of the lock. A real restore drill remains a customer-launch gate.
+Follow [data recovery](data-recovery.md) for the persistent RESTORE_LOCK Worker secret, external deletion journals, replay, credential revocations and release of the lock. Never configure that lock as a plain deployment variable. A real restore drill remains a customer-launch gate.

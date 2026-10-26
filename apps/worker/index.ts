@@ -58,7 +58,10 @@ app.use(
 app.use("*", async (c, next) => {
   if (
     c.env.EDGE_RATE_LIMIT &&
-    (c.req.path.startsWith("/v1/") || c.req.path.startsWith("/api/auth/"))
+    (c.req.path.startsWith("/v1/") ||
+      /^\/api\/auth\/(?:setup|login|recovery|invite)\/(?:options|verify)$/.test(
+        c.req.path,
+      ))
   ) {
     const ip = c.req.header("CF-Connecting-IP") || "local";
     const value = new TextEncoder().encode(
@@ -68,7 +71,18 @@ app.use("*", async (c, next) => {
     const key = Array.from(hash, (value) =>
       value.toString(16).padStart(2, "0"),
     ).join("");
-    const { success } = await c.env.EDGE_RATE_LIMIT.limit({ key });
+    // Coarse anonymous abuse protection is separate from verified-account
+    // read/account/recovery limits in requireAuth. Intake cannot exhaust login.
+    const group = c.req.path.startsWith("/api/auth/")
+      ? "auth-anonymous"
+      : c.req.path.startsWith("/v1/webhooks/")
+        ? "webhook-abuse"
+        : c.req.path.startsWith("/v1/server/")
+          ? "server-abuse"
+          : "collect-abuse";
+    const { success } = await c.env.EDGE_RATE_LIMIT.limit({
+      key: `${group}:${key}`,
+    });
     if (!success) {
       c.header("Retry-After", "60");
       if (c.req.path === "/v1/collect")
@@ -95,9 +109,31 @@ app.use("/v1/*", async (c, next) => {
 app.use("/api/workspaces/*", async (c, next) => {
   if (
     c.env.RESTORE_LOCK === "true" &&
-    !c.req.path.includes("/deletion-journal")
+    !(
+      (c.req.method === "GET" &&
+        /^\/api\/workspaces\/[^/]+\/deletion-journal$/.test(c.req.path)) ||
+      (c.req.method === "POST" &&
+        /^\/api\/workspaces\/[^/]+\/deletion-journal\/reapply$/.test(
+          c.req.path,
+        ))
+    )
   )
     return c.json({ error: "restore_in_progress" }, 503);
+  await next();
+});
+
+app.use("/api/auth/*", async (c, next) => {
+  if (c.env.RESTORE_LOCK === "true") {
+    const allowed =
+      (c.req.method === "GET" && c.req.path === "/api/auth/status") ||
+      (c.req.method === "POST" &&
+        [
+          "/api/auth/login/options",
+          "/api/auth/login/verify",
+          "/api/auth/logout",
+        ].includes(c.req.path));
+    if (!allowed) return c.json({ error: "restore_in_progress" }, 503);
+  }
   await next();
 });
 
@@ -155,7 +191,7 @@ export default {
     _ctx: ExecutionContext,
   ) {
     await runMaintenance(env);
-    await cleanupAuth(env.DB, Date.now());
+    if (env.RESTORE_LOCK !== "true") await cleanupAuth(env.DB, Date.now());
     await cleanupRevenue(env);
     await cleanupFunnels(env);
     await cleanupPrivacy(env);

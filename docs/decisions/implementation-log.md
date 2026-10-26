@@ -25,3 +25,12 @@ GLM Free completed a pinned-source implementation review with no P1 finding in i
 Linux CI caught a deterministic scheduling defect after the GLM fixes. The four-site deletion regression now deliberately reverses job and site order. It failed before the fix and passed after all domain purges adopted one shared job-ordered candidate query. This replaces reliance on incidental SQLite row ordering. The full suite is rerun because the scheduling change crosses analytics, revenue, funnel and privacy cleanup.
 
 The current-schema per-event write probe was rerun because later indexes and attribution updates changed the cost. Local and Linux CI agree on 14 indexed writes for a new-session event,10 for a subsequent pageview and10 for engagement with established buckets. Documentation now supersedes the earlier12/9/9 spike numbers. These remain emulation measurements, not remote billing/capacity promises.
+
+
+## Final independent payment/recovery review
+
+DeepSeek Free completed its implementation review at `4d90769`. All seven findings are corrected in the current source. Checkout claims now precede Dodo checkout creation using a merchant order ID in signed correlation metadata. Optional refund fields normalize only from scoped evidence; unresolved deliveries are persisted and shown for reconciliation, with bounded fair retry and explicit capacity. Two native agents implemented the refund and authentication/recovery changes while the primary agent integrated claims, reporting, retention, deletion and dashboard states.
+
+The recovery lock now closes account-security changes and freezes ordinary scheduled retention, auth expiry and refund retry. Deletion-only cleanup remains active so external journal replay can finish before unlock. The lock is an operator-set Worker secret. SETUP_TOKEN is removable after owner configuration, and authenticated report/export limits use verified account identity.
+
+The final local baseline is 79 Worker/D1 tests and five Chromium flows, plus typecheck, formatting, build, dry-run and a zero-advisory audit. The forward migration was applied to local development storage without recreating the owner/database. All requested provider reviews have returned; remote deployment, clean-account guided install, Dodo sandbox and restore/load drills remain separate evidence gates.

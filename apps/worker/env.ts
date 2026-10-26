@@ -4,7 +4,7 @@ export interface Bindings {
   DB: D1Database;
   ASSETS: Fetcher;
   APP_SECRET: string;
-  SETUP_TOKEN: string;
+  SETUP_TOKEN?: string;
   APP_ORIGIN?: string;
   MODE?: string;
   RESTORE_LOCK?: string;

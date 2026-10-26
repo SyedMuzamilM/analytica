@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { app as worker } from "../apps/worker/index";
 import { Hono } from "hono";
 import { isoCBOR } from "@simplewebauthn/server/helpers";
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
@@ -229,7 +230,7 @@ describe("passkey authentication", () => {
           response: auth.response,
         })
       ).status,
-    ).toBe(401);
+    ).toBe(409);
     expect(
       (await request("/setup/options", { token: env.SETUP_TOKEN })).status,
     ).toBe(409);
@@ -257,6 +258,245 @@ describe("passkey authentication", () => {
       (await json(await request("/status", undefined, secondCookie)))
         .authenticated,
     ).toBe(false);
+  });
+
+  it("allows removing the bootstrap token after setup without breaking sessions or passkey login", async () => {
+    const withoutToken = { ...env, SETUP_TOKEN: undefined };
+    expect(
+      (await request("/login/options", {}, undefined, withoutToken)).status,
+    ).toBe(503);
+    expect(
+      (await json(await request("/status", undefined, undefined, withoutToken)))
+        .secretsReady,
+    ).toBe(false);
+    const owner = await setup();
+    const status = await json(
+      await request("/status", undefined, owner.cookie, withoutToken),
+    );
+    expect(status.authenticated).toBe(true);
+    expect(status.secretsReady).toBe(true);
+    const login = await request("/login/options", {}, undefined, withoutToken);
+    expect(login.status).toBe(200);
+    const challenge = await json(login);
+    const verified = await request(
+      "/login/verify",
+      {
+        challengeId: challenge.challengeId,
+        response: await assertion(owner.auth, challenge.options.challenge),
+      },
+      undefined,
+      withoutToken,
+    );
+    expect(verified.status).toBe(200);
+    expect(
+      (
+        await request(
+          "/setup/options",
+          { token: env.SETUP_TOKEN },
+          undefined,
+          withoutToken,
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (await request("/setup/verify", {}, undefined, withoutToken)).status,
+    ).toBe(409);
+    const unavailable = await request("/login/options", {}, undefined, {
+      ...withoutToken,
+      APP_SECRET: "REPLACE_APP_SECRET",
+    });
+    expect(unavailable.status).toBe(503);
+    expect(
+      (
+        await json(
+          await request("/status", undefined, owner.cookie, {
+            ...withoutToken,
+            APP_SECRET: "REPLACE_APP_SECRET",
+          }),
+        )
+      ).authenticated,
+    ).toBe(false);
+  });
+
+  it("rejects setup verification if the bootstrap token changes or disappears before owner registration", async () => {
+    const options = await json(
+      await request("/setup/options", { token: env.SETUP_TOKEN }),
+    );
+    const auth = await authenticator(options.options.challenge);
+    const proof = { challengeId: options.challengeId, response: auth.response };
+    expect(
+      (
+        await request("/setup/verify", proof, undefined, {
+          ...env,
+          SETUP_TOKEN: "rotated-safe-bootstrap-token-which-is-long-enough",
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await request("/setup/verify", proof, undefined, {
+          ...env,
+          SETUP_TOKEN: undefined,
+        })
+      ).status,
+    ).toBe(503);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) n FROM setup_state").first("n"),
+    ).toBe(0);
+  });
+
+  it("locks every auth mutation during restore while preserving passkey login and owner journal replay", async () => {
+    const owner = await setup();
+    const status = await json(
+      await request("/status", undefined, owner.cookie),
+    );
+    const wid = status.workspaces[0].id;
+    const locked = { ...env, RESTORE_LOCK: "true" };
+    const call = (path: string, method = "POST", body: object = {}) =>
+      worker.request(
+        `${origin}${path}`,
+        {
+          method,
+          headers: {
+            Origin: origin,
+            Cookie: owner.cookie,
+            "Content-Type": "application/json",
+          },
+          body: method === "GET" ? undefined : JSON.stringify(body),
+        },
+        locked,
+      );
+    for (const path of [
+      "/setup/options",
+      "/setup/verify",
+      "/passkeys/options",
+      "/passkeys/verify",
+      "/recovery/options",
+      "/recovery/verify",
+      "/recovery-codes/regenerate",
+      "/invites",
+      "/invite/options",
+      "/invite/verify",
+      "/workspaces",
+      "/sessions/revoke",
+    ]) {
+      const response = await call(`/api/auth${path}`);
+      expect(response.status, path).toBe(503);
+      expect(await response.json()).toEqual({ error: "restore_in_progress" });
+    }
+    expect(
+      (await call(`/api/auth/workspaces/${wid}/members/member`, "DELETE"))
+        .status,
+    ).toBe(503);
+    expect((await call(`/api/workspaces/${wid}/sites`, "GET")).status).toBe(
+      503,
+    );
+    expect((await call("/v1/collect")).status).toBe(503);
+    expect(
+      (await call(`/api/workspaces/${wid}/deletion-journal`, "GET")).status,
+    ).toBe(200);
+    // An empty replay checks completion without adding deletion targets.
+    const replay = await call(
+      `/api/workspaces/${wid}/deletion-journal/reapply`,
+      "POST",
+      { records: [] },
+    );
+    expect(replay.status).toBe(202);
+    const anonymous = await worker.request(
+      `${origin}/api/workspaces/${wid}/deletion-journal`,
+      {},
+      locked,
+    );
+    expect(anonymous.status).toBe(401);
+    expect(
+      (
+        await call(
+          `/api/workspaces/${wid}/sites/deletion-journal-suffix`,
+          "GET",
+        )
+      ).status,
+    ).toBe(503);
+    const restoredStatus = await call("/api/auth/status", "GET");
+    expect((await json(restoredStatus)).authenticated).toBe(true);
+    const challenge = await json(await call("/api/auth/login/options"));
+    const login = await call("/api/auth/login/verify", "POST", {
+      challengeId: challenge.challengeId,
+      response: await assertion(owner.auth, challenge.options.challenge),
+    });
+    expect(login.status).toBe(200);
+    expect((await call("/api/auth/logout")).status).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) n FROM passkeys").first("n"),
+    ).toBe(1);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) n FROM workspaces").first("n"),
+    ).toBe(1);
+  });
+
+  it("limits authenticated reports and exports once per request with a separate recovery bucket", async () => {
+    const owner = await setup();
+    const status = await json(
+      await request("/status", undefined, owner.cookie),
+    );
+    const wid = status.workspaces[0].id;
+    await env.DB.prepare(
+      "INSERT INTO sites(id,workspace_id,name,domain,timezone,privacy_mode,status,created_at) VALUES(?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        "site-limit",
+        wid,
+        "Reports",
+        "reports.test",
+        "UTC",
+        "aggregate",
+        "active",
+        Date.now(),
+      )
+      .run();
+    const keys: string[] = [];
+    let allowReads = true;
+    const bindings = {
+      ...env,
+      EDGE_RATE_LIMIT: {
+        async limit({ key }: { key: string }) {
+          keys.push(key);
+          return {
+            success: !key.startsWith("authenticated:reads:") || allowReads,
+          };
+        },
+      },
+    };
+    const call = (path: string, cookie = owner.cookie) =>
+      worker.request(
+        `${origin}/api/workspaces/${wid}${path}`,
+        { headers: { Cookie: cookie, "CF-Connecting-IP": "192.0.2.1" } },
+        bindings,
+      );
+    expect((await call("/sites/site-limit/report")).status).toBe(200);
+    expect(keys).toEqual([`authenticated:reads:${status.user.id}`]);
+    allowReads = false;
+    for (const path of [
+      "/sites/site-limit/export",
+      "/sites/site-limit/revenue",
+      "/sites/site-limit/funnels",
+      "/sites/site-limit/journeys",
+    ]) {
+      const response = await call(path);
+      expect(response.status, path).toBe(429);
+      expect(response.headers.get("Retry-After")).toBe("60");
+    }
+    expect(keys).toHaveLength(5);
+    expect(
+      keys.every((key) => key === `authenticated:reads:${status.user.id}`),
+    ).toBe(true);
+    expect((await call("/deletion-journal")).status).toBe(200);
+    expect(keys.at(-1)).toBe(`authenticated:recovery:${status.user.id}`);
+    const before = keys.length;
+    expect(
+      (await call("/sites/site-limit/report", "analytica_session=forged"))
+        .status,
+    ).toBe(401);
+    expect(keys).toHaveLength(before);
   });
 
   it("rejects altered origins inside a signed registration response", async () => {

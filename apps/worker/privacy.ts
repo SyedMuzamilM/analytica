@@ -157,6 +157,7 @@ async function finalizeDeletedSite(
     "dirty_buckets",
     "checkout_claims",
     "money_records",
+    "pending_provider_refunds",
     "site_api_keys",
     "payment_integrations",
     "funnels",

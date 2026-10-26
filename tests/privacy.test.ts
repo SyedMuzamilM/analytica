@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { createExecutionContext } from "cloudflare:test";
+import worker from "../apps/worker/index";
 import { Hono } from "hono";
 import { privacyRoutes, cleanupPrivacy } from "../apps/worker/privacy";
 import { collectRoutes, type SiteRecord } from "../apps/worker/analytics";
@@ -85,7 +87,7 @@ async function request(path: string, cookie: string, body?: object) {
 }
 function eventStatement(
   subject = visitorId,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
   targetSite = siteId,
   ts = now,
 ) {
@@ -311,6 +313,117 @@ describe("erasure and recovery journal", () => {
         "UPDATE sites SET status='active' WHERE id='site_privacy_000'",
       ).run(),
     ).rejects.toThrow("site_previously_deleted");
+  });
+
+  it("drains deletion during a locked restore without expiring auth, raw events, financial records or dirty buckets", async () => {
+    await owner();
+    await site();
+    const deletingSite = "site_recovery_delete";
+    await site(deletingSite);
+    const old = now - 400 * 86_400_000;
+    await env.DB.batch([
+      eventStatement("active_visitor", "preserved_event", siteId, old),
+      eventStatement("deleted_visitor", "removed_event", deletingSite),
+      env.DB.prepare(
+        "INSERT INTO auth_challenges(id,challenge,purpose,data,expires_at) VALUES(?,?,?,?,?)",
+      ).bind(
+        "expired_recovery_challenge",
+        "challenge",
+        "login",
+        "{}",
+        now - 1000,
+      ),
+      env.DB.prepare(
+        "INSERT INTO money_records(workspace_id,site_id,namespace,external_id,kind,amount_minor,currency,occurred_at,received_at,digest) VALUES(?,?,?,?,?,?,?,?,?,?)",
+      ).bind(
+        workspaceId,
+        siteId,
+        "api:recovery",
+        "old_payment",
+        "payment",
+        2500,
+        "USD",
+        old,
+        old,
+        "payment-digest",
+      ),
+      env.DB.prepare(
+        "INSERT INTO money_records(workspace_id,site_id,namespace,external_id,kind,amount_minor,currency,occurred_at,received_at,digest) VALUES(?,?,?,?,?,?,?,?,?,?)",
+      ).bind(
+        workspaceId,
+        deletingSite,
+        "api:recovery",
+        "deleted_payment",
+        "payment",
+        1000,
+        "USD",
+        now,
+        now,
+        "delete-digest",
+      ),
+    ]);
+    await env.DB.prepare(
+      "UPDATE analytics_events SET received_at=? WHERE id='preserved_event'",
+    )
+      .bind(old)
+      .run();
+    await env.DB.prepare("UPDATE sites SET status='deleting' WHERE id=?")
+      .bind(deletingSite)
+      .run();
+    const locked = { ...env, RESTORE_LOCK: "true" };
+    await worker.scheduled(
+      { scheduledTime: now, cron: "*/15 * * * *", noRetry() {} },
+      locked,
+      createExecutionContext(),
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM analytics_events WHERE id='preserved_event'",
+      ).first("n"),
+    ).toBe(1);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM auth_challenges WHERE id='expired_recovery_challenge'",
+      ).first("n"),
+    ).toBe(1);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM money_records WHERE external_id='old_payment'",
+      ).first("n"),
+    ).toBe(1);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM dirty_buckets WHERE site_id=?",
+      )
+        .bind(siteId)
+        .first("n"),
+    ).toBe(1);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM daily_summaries WHERE site_id=?",
+      )
+        .bind(siteId)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM analytics_events WHERE site_id=?",
+      )
+        .bind(deletingSite)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) n FROM money_records WHERE site_id=?",
+      )
+        .bind(deletingSite)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT deletion_completed_at FROM sites WHERE id=?")
+        .bind(deletingSite)
+        .first("deletion_completed_at"),
+    ).not.toBeNull();
   });
 
   it("replays an externally saved visitor journal over restored pre-erasure data", async () => {

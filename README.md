@@ -51,7 +51,7 @@ Server keys and webhook secrets belong on the backend. Never embed them in this 
 
 ## Cloudflare deployment
 
-The default distribution is one repository-root Worker and D1 binding `DB`. The deployment script applies migrations using the binding name, so database renames do not break the template. Runtime secrets `APP_SECRET` and `SETUP_TOKEN` must be different fresh random values, at least 32 characters, entered through Cloudflare's secret controls. Example placeholders fail closed.
+The default distribution is one repository-root Worker and D1 binding `DB`. The deployment script applies migrations using the binding name, so database renames do not break the template. Runtime secrets `APP_SECRET` and `SETUP_TOKEN` must be different fresh random values, at least 32 characters, entered through Cloudflare's secret controls. Example placeholders fail closed. SETUP_TOKEN can be removed after the first owner is configured; APP_SECRET remains required.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/SyedMuzamilM/analytica)
 

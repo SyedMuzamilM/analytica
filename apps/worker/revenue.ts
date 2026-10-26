@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireAuth, requireWorkspace } from "./auth";
 import type { AppEnv, Bindings } from "./env";
 import { pendingSiteDeletions } from "./deletion";
+import { recordProviderRefund, retryProviderRefunds } from "./provider-refunds";
 
 const encoder = new TextEncoder();
 const identifier = /^[a-zA-Z0-9_.:-]{1,128}$/;
@@ -533,9 +534,10 @@ moneyRoutes.post("/server/checkouts", async (c) => {
     .first<Record<string, unknown>>();
   const snapshot = credited || session;
   const id = crypto.randomUUID();
+  let inserted = false;
   try {
-    await c.env.DB.prepare(
-      "INSERT INTO checkout_claims(id,workspace_id,site_id,namespace,checkout_id,visitor_id,session_id,source,channel,campaign,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM site_api_keys WHERE id=? AND revoked_at IS NULL) AND EXISTS(SELECT 1 FROM sites WHERE id=? AND workspace_id=? AND status=?)",
+    const result = await c.env.DB.prepare(
+      "INSERT INTO checkout_claims(id,workspace_id,site_id,namespace,checkout_id,visitor_id,session_id,source,channel,campaign,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM site_api_keys k WHERE k.id=? AND k.revoked_at IS NULL AND (k.integration_id IS NULL OR EXISTS(SELECT 1 FROM payment_integrations i WHERE i.id=k.integration_id AND i.disabled_at IS NULL))) AND EXISTS(SELECT 1 FROM sites WHERE id=? AND workspace_id=? AND status=? AND privacy_mode='attribution') ON CONFLICT(workspace_id,site_id,namespace,checkout_id) DO NOTHING",
     )
       .bind(
         id,
@@ -555,22 +557,54 @@ moneyRoutes.post("/server/checkouts", async (c) => {
         "active",
       )
       .run();
+    inserted = result.meta.changes === 1;
   } catch (error) {
-    return c.json(
-      {
-        error: String(error).includes("visitor_suppressed")
-          ? "visitor_suppressed"
-          : "checkout_already_registered",
-      },
-      409,
-    );
+    if (!String(error).includes("visitor_suppressed")) throw error;
+    return c.json({ error: "visitor_suppressed" }, 409);
   }
+  // Check persisted admission as well as the association on retries. A competing
+  // revocation/disable must never return an unusable token after a zero-row insert.
+  const stored = await c.env.DB.prepare(
+    `SELECT c.* FROM checkout_claims c
+     JOIN sites s ON s.workspace_id=c.workspace_id AND s.id=c.site_id
+     WHERE c.workspace_id=? AND c.site_id=? AND c.namespace=? AND c.checkout_id=?
+     AND s.status='active' AND s.privacy_mode='attribution'
+     AND EXISTS(SELECT 1 FROM site_api_keys k WHERE k.id=? AND k.revoked_at IS NULL
+       AND (k.integration_id IS NULL OR EXISTS(SELECT 1 FROM payment_integrations i WHERE i.id=k.integration_id AND i.disabled_at IS NULL)))
+     AND NOT EXISTS(SELECT 1 FROM visitor_suppressions v WHERE v.workspace_id=c.workspace_id AND v.site_id=c.site_id AND v.visitor_id=c.visitor_id)`,
+  )
+    .bind(
+      key.workspace_id,
+      key.site_id,
+      key.namespace,
+      body.checkout_id,
+      key.id,
+    )
+    .first<{
+      id: string;
+      visitor_id: string | null;
+      session_id: string | null;
+      expires_at: number;
+      consumed_by: string | null;
+    }>();
+  if (!stored) return c.json({ error: "checkout_unavailable" }, 409);
+  if (
+    stored.visitor_id !== body.visitor_id ||
+    stored.session_id !== body.session_id ||
+    stored.consumed_by !== null ||
+    stored.expires_at <= Date.now()
+  )
+    return c.json({ error: "checkout_already_registered" }, 409);
   return c.json(
     {
-      claim_token: `${id}.${await hmac(c.env.APP_SECRET, id)}`,
-      expires_in: 86400,
+      claim_token: `${stored.id}.${await hmac(c.env.APP_SECRET, stored.id)}`,
+      expires_in: Math.max(
+        0,
+        Math.floor((stored.expires_at - Date.now()) / 1000),
+      ),
+      checkout_id: body.checkout_id,
     },
-    201,
+    inserted ? 201 : 200,
   );
 });
 
@@ -669,7 +703,10 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
   const input = moneyInput(
     {
       claim_token: metadata.analytica_claim,
-      checkout_id: data.checkout_session_id || data.checkout_id,
+      checkout_id:
+        metadata.analytica_checkout ??
+        data.checkout_session_id ??
+        data.checkout_id,
       transaction_id: data.payment_id,
       refund_id: data.refund_id,
       amount_minor: kind === "payment" ? data.total_amount : data.amount,
@@ -681,7 +718,8 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
     },
     kind,
   );
-  if (!input) return c.json({ error: "invalid_provider_money_record" }, 400);
+  if (!input && kind === "payment")
+    return c.json({ error: "invalid_provider_money_record" }, 400);
   const key: ServerKey = {
     id: "",
     workspace_id: String(integration.workspace_id),
@@ -691,7 +729,22 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
     integrationId: String(integration.id),
   };
   try {
-    const result = await recordMoney(c.env, key, input, {
+    if (kind === "refund") {
+      const result = await recordProviderRefund(
+        c.env,
+        key,
+        data,
+        data.created_at || event.timestamp,
+        {
+          integrationId: String(integration.id),
+          eventId,
+          digest: fingerprint,
+        },
+        recordMoney,
+      );
+      return c.json(result, result.pending ? 202 : 200);
+    }
+    const result = await recordMoney(c.env, key, input!, {
       integrationId: String(integration.id),
       eventId,
       digest: fingerprint,
@@ -699,6 +752,12 @@ moneyRoutes.post("/webhooks/dodo/:integrationId", async (c) => {
     return c.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if (message.includes("invalid_provider_money_record"))
+      return c.json({ error: "invalid_provider_money_record" }, 400);
+    if (message.includes("provider_refund_limit")) {
+      c.header("Retry-After", "60");
+      return c.json({ error: "provider_refund_limit" }, 503);
+    }
     if (/site_inactive|key_revoked_or_site_inactive/.test(message)) {
       const status = await c.env.DB.prepare(
         "SELECT status FROM sites WHERE workspace_id=? AND id=?",
@@ -753,7 +812,7 @@ revenueRoutes.get("/workspaces/:wid/sites/:sid/revenue", async (c) => {
     CASE WHEN p.external_id IS NULL THEN 'pending' WHEN p.currency!=r.currency OR
       (SELECT SUM(x.amount_minor) FROM money_records x WHERE x.workspace_id=r.workspace_id AND x.site_id=r.site_id AND x.namespace=r.namespace AND x.kind='refund' AND x.original_id=r.original_id)>p.amount_minor THEN 'quarantined' ELSE 'confirmed' END refund_status
     FROM money_records r LEFT JOIN money_records p ON p.workspace_id=r.workspace_id AND p.site_id=r.site_id AND p.namespace=r.namespace AND p.kind='payment' AND p.external_id=r.original_id WHERE r.kind='refund'`;
-  const [totals, records, pending] = await c.env.DB.batch([
+  const [totals, records, pending, providerPending] = await c.env.DB.batch([
     c.env.DB.prepare(
       `WITH valid_refunds AS (${refunds}) SELECT currency,SUM(gross) gross,SUM(refunded) refunded,SUM(gross)-SUM(refunded) net,SUM(payments) payments,SUM(unmatched) unmatched FROM (
       SELECT currency,SUM(amount_minor) gross,0 refunded,COUNT(*) payments,SUM(source IS NULL) unmatched FROM money_records WHERE workspace_id=? AND site_id=? AND occurred_at>=? AND occurred_at<? AND kind='payment' GROUP BY currency
@@ -767,11 +826,20 @@ revenueRoutes.get("/workspaces/:wid/sites/:sid/revenue", async (c) => {
     c.env.DB.prepare(
       `WITH refunds AS (${refunds}) SELECT refund_status status,COUNT(*) count FROM refunds WHERE workspace_id=? AND site_id=? AND refund_status!='confirmed' GROUP BY refund_status`,
     ).bind(c.req.param("wid"), c.req.param("sid")),
+    c.env.DB.prepare(
+      "SELECT CASE WHEN status='needs_review' THEN 'needs review' ELSE 'awaiting provider details' END status,COUNT(*) count FROM pending_provider_refunds WHERE workspace_id=? AND site_id=? GROUP BY status",
+    ).bind(c.req.param("wid"), c.req.param("sid")),
   ]);
+  const providerRecords = await c.env.DB.prepare(
+    "SELECT integration_id integrationId,event_id eventId,refund_id refundId,payment_id paymentId,namespace,amount_minor amountMinor,currency,status,reason FROM pending_provider_refunds WHERE workspace_id=? AND site_id=? ORDER BY received_at LIMIT 100",
+  )
+    .bind(c.req.param("wid"), c.req.param("sid"))
+    .all();
   return c.json({
     totals: totals.results,
     records: records.results,
-    pending: pending.results,
+    pending: [...pending.results, ...providerPending.results],
+    providerRefunds: providerRecords.results,
     range: { from, to },
     attribution:
       "Verified backend checkout correlation only. Unmatched payments remain in revenue.",
@@ -788,7 +856,12 @@ export async function cleanupRevenue(env: Bindings, now = Date.now()) {
           "DELETE FROM payment_receipts WHERE rowid IN(SELECT r.rowid FROM payment_receipts r JOIN payment_integrations i ON i.id=r.integration_id WHERE i.workspace_id=? AND i.site_id=? LIMIT 250)",
         )
         .bind(entry.workspace_id, entry.id),
-      ...["checkout_claims", "money_records", "site_api_keys"].map((table) =>
+      ...[
+        "pending_provider_refunds",
+        "checkout_claims",
+        "money_records",
+        "site_api_keys",
+      ].map((table) =>
         db
           .prepare(
             `DELETE FROM ${table} WHERE rowid IN(SELECT rowid FROM ${table} WHERE workspace_id=? AND site_id=? LIMIT 250)`,
@@ -797,11 +870,13 @@ export async function cleanupRevenue(env: Bindings, now = Date.now()) {
       ),
       db
         .prepare(
-          "DELETE FROM payment_integrations WHERE workspace_id=? AND site_id=? AND NOT EXISTS(SELECT 1 FROM payment_receipts r WHERE r.integration_id=payment_integrations.id)",
+          "DELETE FROM payment_integrations WHERE workspace_id=? AND site_id=? AND NOT EXISTS(SELECT 1 FROM payment_receipts r WHERE r.integration_id=payment_integrations.id) AND NOT EXISTS(SELECT 1 FROM pending_provider_refunds p WHERE p.integration_id=payment_integrations.id)",
         )
         .bind(entry.workspace_id, entry.id),
     ]);
   }
+  if (env.RESTORE_LOCK === "true") return;
+  await retryProviderRefunds(env, recordMoney, now);
   await db.batch([
     db
       .prepare(
@@ -815,12 +890,12 @@ export async function cleanupRevenue(env: Bindings, now = Date.now()) {
       .bind(now - 89 * DAY),
     db
       .prepare(
-        `DELETE FROM money_records WHERE rowid IN(SELECT m.rowid FROM money_records m WHERE m.received_at<? AND (m.kind='refund' OR NOT EXISTS(SELECT 1 FROM money_records r WHERE r.workspace_id=m.workspace_id AND r.site_id=m.site_id AND r.namespace=m.namespace AND r.kind='refund' AND r.original_id=m.external_id AND r.received_at>=?)) LIMIT 250)`,
+        `DELETE FROM money_records WHERE rowid IN(SELECT m.rowid FROM money_records m WHERE m.received_at<? AND NOT EXISTS(SELECT 1 FROM pending_provider_refunds p WHERE p.workspace_id=m.workspace_id AND p.site_id=m.site_id AND p.namespace=m.namespace AND p.payment_id=m.external_id AND m.kind='payment') AND (m.kind='refund' OR NOT EXISTS(SELECT 1 FROM money_records r WHERE r.workspace_id=m.workspace_id AND r.site_id=m.site_id AND r.namespace=m.namespace AND r.kind='refund' AND r.original_id=m.external_id AND r.received_at>=?)) LIMIT 250)`,
       )
       .bind(now - 396 * DAY, now - 396 * DAY),
     db
       .prepare(
-        "DELETE FROM payment_receipts WHERE rowid IN(SELECT rowid FROM payment_receipts WHERE received_at<? LIMIT 250)",
+        "DELETE FROM payment_receipts WHERE rowid IN(SELECT rowid FROM payment_receipts WHERE received_at<? AND NOT EXISTS(SELECT 1 FROM pending_provider_refunds p WHERE p.integration_id=payment_receipts.integration_id AND p.event_id=payment_receipts.event_id) LIMIT 250)",
       )
       .bind(now - 396 * DAY),
   ]);

@@ -4,69 +4,73 @@ import { pendingSiteDeletions } from "./deletion";
 
 /** Bounded scheduled work; call again to resume. No request performs an unbounded purge. */
 export async function runMaintenance(
-  env: Pick<Bindings, "DB">,
+  env: Pick<Bindings, "DB" | "RESTORE_LOCK">,
   now = Date.now(),
 ) {
   const db = env.DB;
-  const dirty = await db
-    .prepare(
-      `SELECT d.* FROM dirty_buckets d JOIN sites s ON s.id=d.site_id AND s.workspace_id=d.workspace_id WHERE s.status!='deleting' ORDER BY d.day LIMIT 20`,
-    )
-    .all<{
-      workspace_id: string;
-      site_id: string;
-      day: string;
-      timezone: string;
-    }>();
   let rebuilt = 0;
-  for (const bucket of dirty.results) {
-    const nextDay = new Date(Date.parse(bucket.day + "T12:00:00Z") + 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    // Wait until no permitted late client event can still modify this local day.
-    if (localMidnight(nextDay, bucket.timezone) + 86_400_000 > now) continue;
-    if (rebuilt >= 2) break;
-    const args = [
-      bucket.workspace_id,
-      bucket.site_id,
-      bucket.day,
-      bucket.timezone,
-    ];
-    await db.batch([
-      db
-        .prepare(
-          "DELETE FROM daily_summaries WHERE workspace_id=? AND site_id=? AND day=? AND timezone=?",
-        )
-        .bind(...args),
-      ...["total", "source", "path", "country", "event"].map((dimension) => {
-        const column =
-          dimension === "total"
-            ? "''"
-            : dimension === "event"
-              ? "COALESCE(name,'')"
-              : dimension;
-        const typeFilter =
-          dimension === "event"
-            ? " AND type='goal'"
-            : dimension === "total"
-              ? ""
-              : " AND type='pageview'";
-        return db
+  if (env.RESTORE_LOCK !== "true") {
+    const dirty = await db
+      .prepare(
+        `SELECT d.* FROM dirty_buckets d JOIN sites s ON s.id=d.site_id AND s.workspace_id=d.workspace_id WHERE s.status!='deleting' ORDER BY d.day LIMIT 20`,
+      )
+      .all<{
+        workspace_id: string;
+        site_id: string;
+        day: string;
+        timezone: string;
+      }>();
+    for (const bucket of dirty.results) {
+      const nextDay = new Date(
+        Date.parse(bucket.day + "T12:00:00Z") + 86_400_000,
+      )
+        .toISOString()
+        .slice(0, 10);
+      // Wait until no permitted late client event can still modify this local day.
+      if (localMidnight(nextDay, bucket.timezone) + 86_400_000 > now) continue;
+      if (rebuilt >= 2) break;
+      const args = [
+        bucket.workspace_id,
+        bucket.site_id,
+        bucket.day,
+        bucket.timezone,
+      ];
+      await db.batch([
+        db
           .prepare(
-            `INSERT INTO daily_summaries(workspace_id,site_id,day,timezone,dimension,name,pageviews,goals,definition_version,updated_at)
+            "DELETE FROM daily_summaries WHERE workspace_id=? AND site_id=? AND day=? AND timezone=?",
+          )
+          .bind(...args),
+        ...["total", "source", "path", "country", "event"].map((dimension) => {
+          const column =
+            dimension === "total"
+              ? "''"
+              : dimension === "event"
+                ? "COALESCE(name,'')"
+                : dimension;
+          const typeFilter =
+            dimension === "event"
+              ? " AND type='goal'"
+              : dimension === "total"
+                ? ""
+                : " AND type='pageview'";
+          return db
+            .prepare(
+              `INSERT INTO daily_summaries(workspace_id,site_id,day,timezone,dimension,name,pageviews,goals,definition_version,updated_at)
           SELECT workspace_id,site_id,local_day,timezone,?,${column},SUM(type='pageview'),SUM(type='goal'),1,?
           FROM analytics_events e WHERE workspace_id=? AND site_id=? AND local_day=? AND timezone=?${typeFilter}
           AND NOT EXISTS(SELECT 1 FROM visitor_suppressions v WHERE v.workspace_id=e.workspace_id AND v.site_id=e.site_id AND v.visitor_id=e.visitor_id) AND EXISTS(SELECT 1 FROM sites s WHERE s.workspace_id=e.workspace_id AND s.id=e.site_id AND s.status!='deleting') GROUP BY ${column}`,
+            )
+            .bind(dimension, now, ...args);
+        }),
+        db
+          .prepare(
+            "DELETE FROM dirty_buckets WHERE workspace_id=? AND site_id=? AND day=? AND timezone=?",
           )
-          .bind(dimension, now, ...args);
-      }),
-      db
-        .prepare(
-          "DELETE FROM dirty_buckets WHERE workspace_id=? AND site_id=? AND day=? AND timezone=?",
-        )
-        .bind(...args),
-    ]);
-    rebuilt++;
+          .bind(...args),
+      ]);
+      rebuilt++;
+    }
   }
   const deleting = await pendingSiteDeletions(db);
   for (const site of deleting) {
@@ -87,6 +91,10 @@ export async function runMaintenance(
       ),
     );
   }
+  // Replay-driven deletion must drain while recovery is locked. Ordinary
+  // rollup/retention work must wait until the operator finishes reconciliation.
+  if (env.RESTORE_LOCK === "true")
+    return { rebuilt, deletingSites: deleting.length, expiredRows: 0 };
   const cutoff = now - 90 * 86_400_000;
   const results = await db.batch([
     // Only expire an event after its summary bucket was successfully rebuilt.

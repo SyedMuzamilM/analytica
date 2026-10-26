@@ -33,6 +33,17 @@ interface MoneyReport {
     status: string;
   }[];
   pending: { status: string; count: number }[];
+  providerRefunds?: {
+    integrationId: string;
+    eventId: string;
+    refundId: string;
+    paymentId: string;
+    namespace: string;
+    amountMinor: number | null;
+    currency: string | null;
+    status: string;
+    reason: string;
+  }[];
   attribution: string;
 }
 interface ApiKey {
@@ -322,6 +333,57 @@ export function RevenueView({
           . These amounts are excluded from confirmed net revenue until
           reconciled.
         </div>
+      )}
+      {!!data?.providerRefunds?.length && (
+        <details className="panel settings-panel">
+          <summary>Refunds waiting for confirmation</summary>
+          <p>
+            These refunds are saved. We retry when the original payment arrives.
+            If an amount is missing, check your payment provider and submit the
+            confirmed refund through a server key bound to that integration.
+          </p>
+          <div
+            className="table-scroll"
+            role="region"
+            aria-label="Unresolved provider refunds"
+            tabIndex={0}
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Refund</th>
+                  <th>Original payment</th>
+                  <th>Amount</th>
+                  <th>Next step</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data!.providerRefunds!.map((row) => (
+                  <tr key={`${row.integrationId}:${row.eventId}`}>
+                    <td>
+                      <strong>{row.refundId}</strong>
+                      <small>{row.namespace}</small>
+                    </td>
+                    <td>{row.paymentId}</td>
+                    <td>
+                      {row.amountMinor !== null && row.currency
+                        ? money(row.amountMinor, row.currency)
+                        : "Awaiting details"}
+                    </td>
+                    <td>
+                      {row.reason === "original_payment_required"
+                        ? "Waiting for original payment"
+                        : row.reason === "refund_amount_required"
+                          ? "Confirm amount with provider"
+                          : "Check conflicting refund details"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p>Showing the oldest 100 unresolved deliveries across all dates.</p>
+        </details>
       )}
       {!!records.length && (
         <section className="panel money-table">

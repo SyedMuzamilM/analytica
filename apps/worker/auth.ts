@@ -69,18 +69,22 @@ function bytes(value: string): Uint8Array<ArrayBuffer> {
     (c) => c.charCodeAt(0),
   );
 }
-export function secretsReady(
-  env: Pick<Bindings, "APP_SECRET" | "SETUP_TOKEN">,
-): boolean {
-  const valid = (v: unknown): v is string =>
+function validSecret(v: unknown): v is string {
+  return (
     typeof v === "string" &&
     v.length >= 32 &&
     v.length <= 256 &&
-    !/replace|change.me|placeholder|example/i.test(v);
+    !/replace|change.me|placeholder|example/i.test(v)
+  );
+}
+export function secretsReady(
+  env: Pick<Bindings, "APP_SECRET" | "SETUP_TOKEN">,
+  configured = false,
+): boolean {
   return (
-    valid(env.APP_SECRET) &&
-    valid(env.SETUP_TOKEN) &&
-    env.APP_SECRET !== env.SETUP_TOKEN
+    validSecret(env.APP_SECRET) &&
+    (configured ||
+      (validSecret(env.SETUP_TOKEN) && env.APP_SECRET !== env.SETUP_TOKEN))
   );
 }
 async function digest(secret: string, value: string): Promise<string> {
@@ -217,7 +221,7 @@ async function limit(
 }
 
 async function principal(c: Context<AppEnv>): Promise<Principal | null> {
-  if (!secretsReady(c.env)) return null;
+  if (!validSecret(c.env.APP_SECRET)) return null;
   const token = getCookie(c, COOKIE);
   if (!token || !/^[\w-]{43}$/.test(token)) return null;
   const row = await c.env.DB.prepare(
@@ -229,8 +233,29 @@ async function principal(c: Context<AppEnv>): Promise<Principal | null> {
   return row;
 }
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const user = await principal(c);
+  const authenticated = c.get("principal");
+  const user = authenticated || (await principal(c));
   if (!user) return c.json({ error: "Sign in to continue." }, 401);
+  // Shared route modules can run this middleware more than once. Charge once,
+  // using the verified account rather than a cookie string or a shared NAT IP.
+  if (!authenticated && c.env.EDGE_RATE_LIMIT) {
+    const recovery =
+      /^\/api\/workspaces\/[^/]+\/deletion-journal(?:\/reapply)?$/.test(
+        c.req.path,
+      );
+    const group = recovery
+      ? "recovery"
+      : c.req.method === "GET"
+        ? "reads"
+        : "account";
+    const { success } = await c.env.EDGE_RATE_LIMIT.limit({
+      key: `authenticated:${group}:${user.userId}`,
+    });
+    if (!success) {
+      c.header("Retry-After", "60");
+      return c.json({ error: "rate_limited" }, 429);
+    }
+  }
   c.set("principal", user);
   await next();
 };
@@ -611,11 +636,21 @@ authRoutes.use("*", requireSameOrigin);
 authRoutes.use("*", async (c, next) => {
   c.header("Cache-Control", "no-store");
   if (c.req.path.endsWith("/status")) return next();
-  if (!secretsReady(c.env))
+  const configured = !!(await c.env.DB.prepare(
+    "SELECT 1 FROM setup_state WHERE id=1",
+  ).first());
+  const setup = c.req.path.startsWith("/api/auth/setup/");
+  if (setup && configured)
+    return c.json(
+      { error: "This installation already has an owner. Sign in instead." },
+      409,
+    );
+  if (!secretsReady(c.env, configured))
     return c.json(
       {
-        error:
-          "Configure two different random application and setup secrets, at least 32 characters each.",
+        error: configured
+          ? "Configure a random application secret, at least 32 characters."
+          : "Configure two different random application and setup secrets, at least 32 characters each.",
       },
       503,
     );
@@ -640,7 +675,7 @@ authRoutes.get("/status", async (c) => {
   return c.json({
     configured,
     authenticated: !!user,
-    secretsReady: secretsReady(c.env),
+    secretsReady: secretsReady(c.env, configured),
     mode: c.env.MODE || "self-hosted",
     ...(user ? { user: { id: user.userId, name: user.name }, workspaces } : {}),
   });
@@ -656,7 +691,7 @@ authRoutes.post("/setup/options", async (c) => {
   if (
     typeof b.token !== "string" ||
     b.token.length > 256 ||
-    !(await equalSecret(b.token, c.env.SETUP_TOKEN, c.env.APP_SECRET))
+    !(await equalSecret(b.token, c.env.SETUP_TOKEN!, c.env.APP_SECRET))
   )
     return fail(401, "The setup token is incorrect.");
   return registrationOptions(c, "setup", {
