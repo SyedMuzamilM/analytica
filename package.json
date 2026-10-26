@@ -15,7 +15,7 @@
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "deploy": "npm run db:migrate && wrangler deploy",
     "deploy:check": "wrangler deploy --dry-run",
-    "types": "wrangler types",
+    "types": "wrangler types --include-runtime false",
     "setup:local": "node scripts/setup-local.mjs"
   },
   "dependencies": {

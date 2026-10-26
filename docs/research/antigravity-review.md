@@ -15,7 +15,7 @@
 ## 1. Executive Summary & Verification Methodology
 
 ### 1.1 Objective & Scope
-The objective of this research is to evaluate **Minilytics** (a lightweight, revenue-first web analytics platform designed for Cloudflare Workers and D1) and synthesize the complete technical and product foundation for **Analytica** — an independently designed, enterprise-grade, privacy-first web and revenue analytics platform. 
+The objective of this research is to evaluate **Minilytics** (a lightweight, revenue-first web analytics platform designed for Cloudflare Workers and D1) and synthesize the complete technical and product foundation for **Analytica** — an independently designed, enterprise-grade, privacy-first web and revenue analytics platform.
 
 Analytica must support two deployment paradigms natively:
 1. **Zero-Friction One-Click Self-Host:** Deployable directly to a user's free-tier Cloudflare account via Cloudflare Workers Deploy Button with zero infrastructure cost for indie hackers.
@@ -116,7 +116,7 @@ flowchart TD
     subgraph Cloudflare Global Edge Network
         DNS[Cloudflare DNS / Custom Domains]
         Proxy[Edge Worker / Reverse Proxy]
-        
+
         subgraph Ingestion Pipeline
             CollectWorker[Ingress Worker: /api/v1/event]
             Queue[Cloudflare Workers Queue: analytica-events]
@@ -150,7 +150,7 @@ flowchart TD
 
     Queue -->|Micro-batch 100ms / 500 events| BatchConsumer
     BatchConsumer -->|Batch Upsert Sessions/Events| D1
-    
+
     APIWorker -->|Read Stats & Aggregations| D1
     APIWorker -->|Tenant / User Auth| D1
     APIWorker -->|Read Hot Cache| KV
