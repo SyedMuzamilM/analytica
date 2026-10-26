@@ -37,3 +37,16 @@ GLM and DeepSeek ran the models advertised as free in the provider catalog. This
 The independent providers inspected source and documentation. Their reports did not exercise a live Cloudflare deploy, verify a real payment integration, or benchmark the proposed design. Labels such as "verified" describe the stated source inspection; they do not prove the recommended implementation is correct. Some line references are approximate and should be checked against the pinned source when implementing.
 
 The primary assessment separately records successful upstream tests, typecheck and build, plus the scope of its dependency audit. The final review is complete and its findings have been incorporated. Phase 0 executable checks are still required before implementing dependent features or representing the installation as deployment-ready. The original reports remain historical research inputs; the reconciliation and corrected plan govern implementation.
+
+
+## Implementation reviews
+
+All requested providers also reviewed the new implementation. Reports are pinned to their stated commits and do not automatically cover later corrections.
+
+- [Antigravity dashboard and flow review](implementation-antigravity-review.md)
+- [GLM data and security review](implementation-glm-review.md)
+- [DeepSeek deployment and payment review](implementation-deepseek-review.md)
+- [Analytics peer review](implementation-analytics-review.md)
+- [Corrections and verification](implementation-review-disposition.md)
+
+The corrected implementation currently passes 79 Worker/D1 tests and five Chromium flows. [Release evidence](../operations/release-status.md) records the current deployment and remote verification gaps; the earlier Phase 0 language above describes the original planning boundary.
