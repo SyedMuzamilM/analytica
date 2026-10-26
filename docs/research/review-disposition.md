@@ -1,0 +1,27 @@
+# GPT-6.1 Sol review disposition
+
+Completed by the primary agent on 26 October 2026 after reading the independent [GPT-6.1 Sol review](sol-review.md). All corrections below are in the [implementation plan](../implementation-plan.md). They resolve planning gaps; they do not establish runtime correctness or represent a second reviewer approval.
+
+| Finding | Correction | Evidence still required |
+| --- | --- | --- |
+| P1-1. Alpha release order | Reconciled release table and phases. Added one mandatory customer alpha gate covering auth/revocation/recovery, privacy, bounded admission, retention, operator export/deletion and isolated deployments. Disabled customer payments until Phase 3. | Execute the checklist before any customer collection. Earlier deployments use synthetic data only. |
+| P1-2. Retention versus attributed revenue | Separated the 13-month financial snapshot from 90-day identity/detail. Specified non-cascading ledger references, refund inheritance, expired rematching, per-feature retention coverage, timezone versioning, identity erasure, and restore deletion journal. | Advance fixtures through expiry, refund, filtered reporting, erasure, site deletion and restore. Confirm remaining columns and totals. |
+| P1-3. Idempotency beyond event insert | Added canonical payload conflicts, receipt/retry lifetimes, atomic quota/derived mutations, replaceable dirty summaries and checkpoints. Defined canonical merchant transaction identity, overlap prevention for generic/webhook intake, immutable adjustments and pending/excess refund handling. | Concurrent duplicates and changed payloads, interrupted mutations/jobs, late records after summaries, dual-input sale and several partial refunds. |
+| P1-4. Checkout-token trust | Only an authenticated merchant backend issues a scoped expiring claim. Verified checkout mapping binds the transaction. Collector/browser metadata cannot mint or repoint identity. Nonces consume atomically and both delivery orders converge. | Swapped visitor, cross-site checkout, expired/reused claim, untrusted metadata and return/webhook permutation tests. |
+| P2-1. Free CPU and bootstrap | Required measured auth and scheduled-maintenance CPU, secure credential parameters, tail failures, origin/RP migration policy and atomic owner setup/recovery fixtures. Never weaken hashing to fit Free. | Select and exercise the library, credential method, Free/Paid profile and recovery; record any Paid requirement before claiming free support. |
+| P2-2. Aggregate/session/ordering definitions | Aggregate mode reports events/document-session estimates; full navigation loses identity; no aggregate funnels/unique-person claims. Added client sequence and late-session rules, cohort denominator and repeated-funnel-step rules, IANA/DST and timezone-change cases. | Browser navigation/consent/idle fixtures and spring/fall DST reports, including expired-summary coverage. |
+| P2-3. Authoritative admission and deletion | Proposed insert-gated D1 quotas and site/key-state checks, approximate edge throttling, duplicate-free quota charging, reserved maintenance capacity and authoritative deleting-state before chunked removal. | Prove SQL atomicity and global/per-site budget behavior; race intake/jobs with deletion, revocation and membership changes; measure noisy-tenant impact. |
+| P2-4. Deploy configuration and permissions | Repository-root template/build, explicit `/api/*`, `/v1/*`, `/healthz` routing, matched migration/deploy environments, exact Wrangler/config/credential evidence. Secret prefill and migration token access remain test cases. | Fresh button install, resource rename, untouched placeholders, actual CI permissions, partial failure/retry, update and preserved owner/data. |
+| P2-5. Capacity/storage fixture | Added 90-day event and engagement-receipt sizing, average daily writes, full-retention storage fixtures, post-cleanup size and shared-account/staging headroom. Kept cost scenarios conditional. | Measure per-class reads/writes/CPU, retained/indexed bytes and concurrent report/maintenance load before quotas or cost promises. |
+
+## Other review corrections
+
+- Narrowed the assessment's cache observation. Upstream generic bearer-key lookup reads D1 directly; missing isolate invalidation is not proof that an old bearer key remains accepted.
+- Added the upstream DST offset limitation to the assessment.
+- Rejected secret-bearing assistant setup prompts and claims that KV supplies immediate security revocation or D1 provides application row-level security automatically.
+- Added Cloudflare Email Service as a candidate requiring eligibility/runtime review, preserving the requirement to avoid assuming an external mail service.
+- Kept provider cost examples historical. DeepSeek's 10-million-pageview inputs imply $26.60 before CPU/storage/reads/builds/logs, or $27.60-28.60 with its assumed extra $1-2. Its 20-million example reaches $101.20 from base fee, request and write overages alone. Neither establishes capacity or margin.
+
+## Handoff
+
+The research and planning task is complete. Phase 0 is the next implementation step. Select the final name/repository before publishing, privately supply fresh deployment credentials when account testing begins, and record the tested auth, atomic SQL, capacity and deployment decisions before dependent feature work. No application, public deployment, or functioning deploy button is claimed by these documents.

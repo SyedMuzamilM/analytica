@@ -1,0 +1,15 @@
+# Deletion and recovery
+
+The app supports owner/admin visitor erasure and owner site deletion. Erasure commits a suppression record before deleting visit detail in bounded batches; new events using that identifier are rejected. Raw reports, journeys, funnels and exports exclude the suppressed identifier while cleanup drains. Financial snapshots contain sanitized acquisition dimensions, not customer email or name. Site deletion also removes its money, keys and integrations. A retained site tombstone prevents intake and marks completion after every domain table is empty.
+
+GET `/api/workspaces/WORKSPACE_ID/deletion-journal` lets an authenticated workspace owner download the opaque deletion records. Keep this journal privately outside the D1 database before any restore, alongside the account's backup process. A journal inside a restored database cannot prove deletions that happened after that snapshot. Treat opaque visitor/site identifiers as sensitive operational data and restrict access.
+
+Before restoring D1, set the runtime variable `RESTORE_LOCK=true` and deploy it. This blocks collection and ordinary workspace reports/mutations while allowing auth and deletion-journal replay. Preserve the existing APP_SECRET and final application origin. Do not reopen first-owner setup or replace the configured passkey relying-party origin during recovery.
+
+Restore the chosen D1 Time Travel snapshot using the pinned Wrangler version's `d1 time-travel` commands. Consult `npx wrangler d1 time-travel --help` and verify the target account/database/environment before mutation. A restore can remove writes made after the chosen timestamp. Worker rollback and database restore are different operations; prefer compatible forward migrations and Worker version rollback for ordinary application errors.
+
+For every workspace, reapply its newest external journal with owner-authenticated POST `/api/workspaces/WORKSPACE_ID/deletion-journal/reapply` and JSON `{ "records": [...] }`. Send at most 20 records per batch, preserving the opaque record IDs. Repeating a batch is safe. This schedules deletion and suppression without recreating users. A `workspaceReplayComplete` response covers only that workspace, never the whole installation.
+
+Keep RESTORE_LOCK set while scheduled cleanup drains and while checking every workspace's required replay. Reconcile money totals and summaries, verify erased identifiers are absent from reports and intake, and verify all pending site-deletion work has finished. Revoke restored sessions/keys that had been revoked after the snapshot using the operator's current access inventory. Only then remove RESTORE_LOCK. The current journal records visitor/site erasure, not all account security changes; session/key revocation requires this separate operator check.
+
+This runbook has local regression fixtures for suppression, replay, and more than two deleting sites. A real Cloudflare backup/restore drill and retained-journal storage/access process remain required before admitting external customer data. No automatic off-account backup service is configured by the app.
