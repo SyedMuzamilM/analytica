@@ -895,6 +895,10 @@ function SettingsView({
               <option value="active">Active</option>
               <option value="paused">Paused</option>
             </select>
+            <small>
+              Pausing stops browser events and money intake. Payment deliveries
+              may expire if the provider stops retrying.
+            </small>
           </label>
           {error && (
             <p role="alert" className="inline-error">
