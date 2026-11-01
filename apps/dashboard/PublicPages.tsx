@@ -76,7 +76,7 @@ function PublicFooter() {
         </nav>
       </div>
       <a href="/" className="footer-wordmark" aria-label="Analytica home">
-        analytica.
+        analytica<span className="brand-period">.</span>
       </a>
       <div className="footer-bottom">
         <span>© {new Date().getFullYear()} Analytica</span>

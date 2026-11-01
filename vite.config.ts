@@ -9,9 +9,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:8787",
-      "/v1": "http://127.0.0.1:8787",
-      "/healthz": "http://127.0.0.1:8787",
+      "^/(?:api|v1)(?:/|\\?|$)": "http://127.0.0.1:8787",
+      "^/healthz(?:\\?|$)": "http://127.0.0.1:8787",
     },
   },
 });

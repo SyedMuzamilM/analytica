@@ -9,11 +9,14 @@ Analytica shares MZML's identity while giving reports the space and density of a
 | Crimson and primary action | `#cb173f` |
 | Action hover               | `#b01336` |
 | Crimson tint               | `#fbecef` |
+| Wordmark dot               | `#087f8c` |
 | Charcoal text              | `#333939` |
 | White panels               | `#ffffff` |
 | Subtle ground              | `#f7f8f9` |
 
 Headings and the wordmark use Plus Jakarta Sans. Body text and the interface use Lexend. Both fonts are served locally as variable WOFF2 files, with their SIL Open Font Licenses in `public/fonts`. Code examples retain the system monospace font.
+
+The wordmark uses weight 800 and tracking of `-0.095em` so the letters touch. Its teal dot has normal tracking to keep the final glyph inside the wordmark's bounds. Apply this treatment to both the navigation logo and the large footer wordmark.
 
 `product.css` owns shared tokens, Kumo theme integration, account screens, and console extensions. `marketing.css` owns public pages and their responsive layouts. `styles.css` contains the underlying report and application layouts.
 

@@ -639,7 +639,7 @@
   font-weight: 800;
   font-size: clamp(90px, 17.2vw, 248px);
   line-height: 1.2;
-  letter-spacing: -0.065em;
+  letter-spacing: -0.095em;
   color: var(--ink);
 }
 .footer-bottom {

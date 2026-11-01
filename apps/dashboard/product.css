@@ -16,6 +16,7 @@
   --accent: #cb173f;
   --accent-hover: #b01336;
   --accent-soft: #fbecef;
+  --brand-dot: #087f8c;
   --canvas: #f7f8f9;
   --panel: #fff;
   --ink: #333939;
@@ -51,7 +52,8 @@ summary:focus-visible,
 }
 .brand {
   color: var(--ink);
-  letter-spacing: -1.2px;
+  letter-spacing: -0.095em;
+  font-weight: 800;
   font-size: 26px;
 }
 .brand-mark {
@@ -60,7 +62,8 @@ summary:focus-visible,
   box-shadow: none;
 }
 .brand-period {
-  color: var(--accent);
+  color: var(--brand-dot);
+  letter-spacing: 0;
 }
 
 :is([data-kumo-component="Button"], [data-kumo-component="LinkButton"]) {
