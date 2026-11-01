@@ -560,7 +560,7 @@ summary:focus-visible,
 }
 .project-logo-panel p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.8;
   margin: 10px 0 18px;
 }

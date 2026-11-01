@@ -144,8 +144,12 @@ function Modal({
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const current = dialog.current;
+    const previousFocus = document.activeElement;
     current?.showModal();
-    return () => current?.close();
+    return () => {
+      current?.close();
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
   }, []);
   return (
     <dialog
@@ -156,7 +160,15 @@ function Modal({
         onClose();
       }}
       onClick={(event) => {
-        if (event.target === dialog.current) onClose();
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom
+        )
+          onClose();
       }}
       aria-label={title}
     >
@@ -847,146 +859,77 @@ function SettingsView({
   }
   return (
     <div className="settings-grid">
-      <ProjectImage
-        site={site}
-        canEdit={canEdit}
-        demo={demo}
-        onChanged={onSiteChange}
-        notify={notify}
-      />
-      <section className="panel settings-panel">
-        <div className="panel-heading">
-          <h2>Website details</h2>
-          <span className={`status-tag ${site.status}`}>{site.status}</span>
-        </div>
-        <form onSubmit={save}>
-          <label>
-            Website name
-            <input
-              name="name"
-              defaultValue={site.name}
-              maxLength={80}
-              required
-              disabled={!canEdit}
-            />
-          </label>
-          <label>
-            Domain
-            <input value={site.domain} readOnly />
-            <small>The collection domain is fixed for this website.</small>
-          </label>
-          <label>
-            Timezone
-            <select name="timezone" defaultValue={site.timezone} disabled>
-              {[
-                ...new Set([
-                  site.timezone,
-                  "UTC",
-                  "America/New_York",
-                  "America/Los_Angeles",
-                  "Europe/London",
-                  "Europe/Berlin",
-                  "Asia/Kolkata",
-                  "Asia/Tokyo",
-                ]),
-              ].map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-            <small>
-              The reporting timezone is fixed for this website to keep
-              historical totals consistent.
-            </small>
-          </label>
-          <label>
-            Collection
-            <select
-              name="status"
-              defaultValue={site.status}
-              disabled={!canEdit}
-            >
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-            </select>
-            <small>
-              Pausing stops browser events and money intake. Payment deliveries
-              may expire if the provider stops retrying.
-            </small>
-          </label>
-          {error && (
-            <p role="alert" className="inline-error">
-              {error}
-            </p>
-          )}
-          {canEdit && (
-            <button className="button primary" disabled={saving}>
-              {saving ? "Saving…" : "Save changes"}
-            </button>
-          )}
-        </form>
-      </section>
       <div className="settings-stack">
         <section className="panel settings-panel">
           <div className="panel-heading">
-            <h2>Install the tracker</h2>
-            <span className="small-pill">
-              {site.privacyMode === "aggregate"
-                ? "Aggregate mode"
-                : "Attribution mode"}
-            </span>
+            <h2>Website details</h2>
+            <span className={`status-tag ${site.status}`}>{site.status}</span>
           </div>
-          <p>
-            Add this snippet before the closing <code>&lt;/head&gt;</code> tag
-            on your website.
-          </p>
-          <pre>
-            <code>{snippet}</code>
-          </pre>
-          <CopyButton value={snippet} label="Copy snippet" />
-          <div className="installation-note">
-            <ShieldCheck size={17} />
-            <p>
-              {site.privacyMode === "aggregate"
-                ? "No persistent visitor cookie or fingerprint. Full page navigation starts a new document ID."
-                : "Attribution starts only after your site grants consent. Call analytica('consent', true) after your configured consent condition."}
-            </p>
-          </div>
-          <div className="code-example">
-            <span>Track an action</span>
-            <code>window.analytica('goal', 'signup')</code>
-            <span>Respect an opt-out</span>
-            <code>window.analytica('optOut', true)</code>
-          </div>
-        </section>
-        <section className="panel settings-panel">
-          <div className="panel-heading">
-            <h2>Application connection</h2>
-          </div>
-          <p>
-            For desktop and mobile collectors, use these public project values.
-            Enable application analytics only after opt-in.
-          </p>
-          <dl className="connection-facts">
-            {[
-              ["Collector endpoint", `${window.location.origin}/v1/collect`],
-              ["Public project ID", site.id],
-              ["Collection hostname", site.domain],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>
-                  <code>{value}</code>
-                  <CopyButton
-                    value={value}
-                    label={`Copy ${label.toLowerCase()}`}
-                  />
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <a href="/docs#applications" className="subtle-link">
-            Read the application guide <ArrowRight size={14} />
-          </a>
+          <form onSubmit={save}>
+            <label>
+              Website name
+              <input
+                name="name"
+                defaultValue={site.name}
+                maxLength={80}
+                required
+                disabled={!canEdit}
+              />
+            </label>
+            <label>
+              Domain
+              <input value={site.domain} readOnly />
+              <small>The collection domain is fixed for this website.</small>
+            </label>
+            <label>
+              Timezone
+              <select name="timezone" defaultValue={site.timezone} disabled>
+                {[
+                  ...new Set([
+                    site.timezone,
+                    "UTC",
+                    "America/New_York",
+                    "America/Los_Angeles",
+                    "Europe/London",
+                    "Europe/Berlin",
+                    "Asia/Kolkata",
+                    "Asia/Tokyo",
+                  ]),
+                ].map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+              <small>
+                The reporting timezone is fixed for this website to keep
+                historical totals consistent.
+              </small>
+            </label>
+            <label>
+              Collection
+              <select
+                name="status"
+                defaultValue={site.status}
+                disabled={!canEdit}
+              >
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+              <small>
+                Pausing stops browser events and money intake. Payment
+                deliveries may expire if the provider stops retrying.
+              </small>
+            </label>
+            {error && (
+              <p role="alert" className="inline-error">
+                {error}
+              </p>
+            )}
+            {canEdit && (
+              <button className="button primary" disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            )}
+          </form>
         </section>
         <section className="panel settings-panel">
           <div className="panel-heading">
@@ -1081,6 +1024,77 @@ function SettingsView({
               </button>
             </div>
           )}
+        </section>
+      </div>
+      <div className="settings-stack">
+        <ProjectImage
+          site={site}
+          canEdit={canEdit}
+          demo={demo}
+          onChanged={onSiteChange}
+          notify={notify}
+        />
+        <section className="panel settings-panel">
+          <div className="panel-heading">
+            <h2>Install the tracker</h2>
+            <span className="small-pill">
+              {site.privacyMode === "aggregate"
+                ? "Aggregate mode"
+                : "Attribution mode"}
+            </span>
+          </div>
+          <p>
+            Add this snippet before the closing <code>&lt;/head&gt;</code> tag
+            on your website.
+          </p>
+          <pre>
+            <code>{snippet}</code>
+          </pre>
+          <CopyButton value={snippet} label="Copy snippet" />
+          <div className="installation-note">
+            <ShieldCheck size={17} />
+            <p>
+              {site.privacyMode === "aggregate"
+                ? "No persistent visitor cookie or fingerprint. Full page navigation starts a new document ID."
+                : "Attribution starts only after your site grants consent. Call analytica('consent', true) after your configured consent condition."}
+            </p>
+          </div>
+          <div className="code-example">
+            <span>Track an action</span>
+            <code>window.analytica('goal', 'signup')</code>
+            <span>Respect an opt-out</span>
+            <code>window.analytica('optOut', true)</code>
+          </div>
+        </section>
+        <section className="panel settings-panel">
+          <div className="panel-heading">
+            <h2>Application connection</h2>
+          </div>
+          <p>
+            For desktop and mobile collectors, use these public project values.
+            Enable application analytics only after opt-in.
+          </p>
+          <dl className="connection-facts">
+            {[
+              ["Collector endpoint", `${window.location.origin}/v1/collect`],
+              ["Public project ID", site.id],
+              ["Collection hostname", site.domain],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  <code>{value}</code>
+                  <CopyButton
+                    value={value}
+                    label={`Copy ${label.toLowerCase()}`}
+                  />
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <a href="/docs#applications" className="subtle-link">
+            Read the application guide <ArrowRight size={14} />
+          </a>
         </section>
       </div>
     </div>

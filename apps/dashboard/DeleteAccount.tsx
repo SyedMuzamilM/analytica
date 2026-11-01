@@ -13,8 +13,12 @@ function DeletionDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
   useEffect(() => {
     const current = dialog.current;
+    const previousFocus = document.activeElement;
     current?.showModal();
-    return () => current?.close();
+    return () => {
+      current?.close();
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
   }, []);
   async function remove(event: FormEvent) {
     event.preventDefault();

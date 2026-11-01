@@ -1204,24 +1204,35 @@ h1 + .page-heading {
 }
 .settings-grid {
   display: grid;
-  grid-template-columns: minmax(250px, 0.8fr) minmax(350px, 1.3fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 23px;
   margin-top: 9px;
   margin-bottom: 30px;
   align-items: start;
 }
 .settings-panel {
-  padding: 0 20px 21px;
+  padding: 24px;
 }
 .settings-panel > .panel-heading {
   padding: 0;
-  margin-bottom: 21px;
-  min-height: 54px;
+  padding-bottom: 18px;
+  margin-bottom: 24px;
+  min-height: 0;
 }
 .settings-panel p {
-  font-size: 11px;
-  color: #8894a5;
+  font-size: 13px;
+  color: var(--muted);
   line-height: 1.7;
+}
+.settings-panel form {
+  display: grid;
+  gap: 20px;
+}
+.settings-panel form > label {
+  margin-bottom: 0;
+}
+.settings-panel form > .button {
+  justify-self: start;
 }
 .settings-panel pre {
   font-size: 11px;
@@ -1240,6 +1251,7 @@ h1 + .page-heading {
   display: flex;
   flex-direction: column;
   gap: 23px;
+  min-width: 0;
 }
 .status-tag {
   font-size: 11px;
@@ -1561,19 +1573,26 @@ h1 + .page-heading {
   gap: 10px;
 }
 .modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   background: #fff;
-  border: 1px solid #dfe5ee;
-  border-radius: 12px;
-  padding: 24px;
-  width: 460px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px;
+  width: 520px;
   max-width: calc(100vw - 32px);
-  max-height: 90vh;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--ink);
   box-shadow: 0 20px 70px #14264726;
 }
 .modal::backdrop {
-  background: #1d2c4966;
-  backdrop-filter: blur(2px);
+  background: #33393966;
+}
+body:has(dialog[open]) {
+  overflow: hidden;
 }
 .modal-wide {
   width: 660px;
@@ -1586,12 +1605,12 @@ h1 + .page-heading {
   margin-bottom: 14px;
 }
 .modal-heading h2 {
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.5px;
 }
 .modal-copy {
-  color: #8895a8;
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 13px;
   line-height: 1.8;
   margin: 0 0 22px;
 }
@@ -1627,8 +1646,8 @@ h1 + .page-heading {
   cursor: pointer;
 }
 .radio-card:has(input:checked) {
-  border-color: #b6c7f0;
-  background: #f6f8ff;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .radio-card > input {
   width: 14px;
@@ -1643,8 +1662,8 @@ h1 + .page-heading {
   margin-bottom: 4px;
 }
 .radio-card small {
-  color: #8b98aa;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 1.6;
 }
 .recovery-grid {
@@ -1966,7 +1985,7 @@ h1 + .page-heading {
     display: none;
   }
   .settings-grid {
-    grid-template-columns: minmax(210px, 0.75fr) minmax(310px, 1.2fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
   }
   .toast {
