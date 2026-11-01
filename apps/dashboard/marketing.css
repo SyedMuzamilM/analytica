@@ -182,13 +182,6 @@
   align-items: center;
   gap: 10px;
 }
-.preview-controls select {
-  width: auto;
-  min-height: 36px;
-  padding-right: 25px;
-  border-radius: 4px;
-  font-size: 12px;
-}
 .preview-sample {
   color: var(--muted);
   font-size: 12px;
@@ -962,13 +955,6 @@
   .preview-controls {
     width: 100%;
     gap: 8px;
-  }
-  .preview-controls select {
-    flex: 1;
-    min-width: 0;
-    width: 0;
-    font-size: 12px;
-    min-height: 36px;
   }
   .preview-body {
     grid-template-columns: 1fr;

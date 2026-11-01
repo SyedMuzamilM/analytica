@@ -44,7 +44,6 @@ h3,
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible,
 summary:focus-visible,
 [tabindex="0"]:focus-visible {
   outline: 3px solid var(--accent);

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Site, Workspace } from "../../packages/contracts";
 import { api, formatNumber, friendlyError, post } from "./api";
+import { SelectField } from "./SelectField";
 
 interface MoneyReport {
   totals: {
@@ -261,15 +262,15 @@ export function RevenueView({
         <>
           <div className="revenue-heading">
             <span>Money by transaction date</span>
-            <select
-              aria-label="Revenue currency"
+            <SelectField
+              label="Revenue currency"
               value={selected.currency}
-              onChange={(event) => setCurrency(event.target.value)}
-            >
-              {data!.totals.map((total) => (
-                <option key={total.currency}>{total.currency}</option>
-              ))}
-            </select>
+              onValueChange={setCurrency}
+              options={data!.totals.map((total) => ({
+                value: total.currency,
+                label: total.currency,
+              }))}
+            />
           </div>
           <div className="stats-strip">
             <div className="stat">
@@ -554,16 +555,20 @@ export function RevenueView({
                   </label>
                   <label>
                     Checkout integration
-                    <select name="integrationId" defaultValue="">
-                      <option value="">Generic API only</option>
-                      {integrations
-                        .filter((i) => !i.disabled_at)
-                        .map((i) => (
-                          <option key={i.id} value={i.id}>
-                            Dodo: {i.merchant_id}
-                          </option>
-                        ))}
-                    </select>
+                    <SelectField
+                      label="Checkout integration"
+                      name="integrationId"
+                      defaultValue=""
+                      options={[
+                        { value: "", label: "Generic API only" },
+                        ...integrations
+                          .filter((item) => !item.disabled_at)
+                          .map((item) => ({
+                            value: item.id,
+                            label: `Dodo: ${item.merchant_id}`,
+                          })),
+                      ]}
+                    />
                     <small>
                       Choose Dodo to correlate backend-created checkouts with
                       its signed webhooks.

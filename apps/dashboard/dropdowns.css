@@ -1,0 +1,225 @@
+#root {
+  isolation: isolate;
+}
+.select-field {
+  display: inline-block;
+  min-width: 0;
+  width: 100%;
+  vertical-align: middle;
+}
+label > .select-field {
+  margin-top: 7px;
+}
+.select-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.4;
+  box-shadow: none;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out;
+}
+.select-trigger:hover:not(:disabled) {
+  background: var(--canvas);
+  border-color: var(--muted);
+}
+.select-trigger:disabled {
+  background: var(--canvas);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.select-trigger > span:first-child {
+  min-width: 0;
+  flex: 1;
+}
+.select-value,
+.select-option-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.select-value > svg,
+.select-option-content > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.select-value-text,
+.select-option-text {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.select-value-text > span,
+.select-value-text > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-value-text > small,
+.select-option-text > small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.select-value .project-symbol {
+  width: 28px;
+  height: 28px;
+}
+.select-option-content .project-symbol {
+  width: 34px;
+  height: 34px;
+}
+.select-value .project-symbol svg,
+.select-option-content .project-symbol svg {
+  width: 18px;
+  height: 18px;
+}
+[role="listbox"]:has(.select-option) {
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: min(360px, var(--available-height));
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--panel);
+  overscroll-behavior: contain;
+}
+.select-option {
+  min-height: 40px;
+  padding: 10px 12px;
+  margin: 2px 6px;
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.select-option-text {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.select-option[data-highlighted] {
+  background: var(--canvas);
+}
+.select-option[data-selected] {
+  background: var(--accent-soft);
+}
+.select-option > span:last-child > svg {
+  color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+.select-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+.workspace-switch {
+  display: block;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  min-height: 0;
+  margin-bottom: 16px;
+}
+.workspace-select {
+  min-height: 64px;
+  padding: 10px;
+}
+.workspace-select .select-value-text > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.workspace-manage {
+  margin: 0 0 22px;
+  color: var(--muted);
+}
+.site-switch {
+  max-width: 290px;
+}
+.project-select {
+  min-height: 44px;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+}
+.project-select .select-value-text > span {
+  font-weight: 600;
+}
+.page-actions > .select-field {
+  width: auto;
+}
+.date-select {
+  min-height: 36px;
+  width: 152px;
+  font-size: 12px;
+}
+.preview-controls > .select-field {
+  width: auto;
+  min-width: 0;
+}
+.preview-controls .select-trigger {
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.revenue-heading > .select-field {
+  width: 120px;
+}
+@media (max-width: 800px) {
+  .date-select {
+    width: 135px;
+  }
+  .topbar .site-switch {
+    min-width: 0;
+  }
+}
+@media (max-width: 680px) {
+  .preview-controls > .select-field {
+    flex: 1;
+    width: 0;
+  }
+}
+@media (max-width: 560px) {
+  .topbar .site-switch {
+    max-width: 165px;
+  }
+  .project-select {
+    min-height: 36px;
+    padding-inline: 4px;
+    gap: 7px;
+  }
+  .project-select .select-value-text > small {
+    display: none;
+  }
+  .project-select .select-value-text > span {
+    font-size: 12px;
+  }
+  .date-select {
+    width: 128px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+  .date-select .select-value > svg {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-trigger {
+    transition: none;
+  }
+}

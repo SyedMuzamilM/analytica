@@ -10,10 +10,8 @@ test("demo filters, navigation and mobile layout work without authentication", a
     page.getByText("Demo data", { exact: false }).first(),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /overview/i })).toBeVisible();
-  const select = page
-    .getByRole("combobox")
-    .filter({ has: page.locator('option[value="30d"]') });
-  if (await select.count()) await select.selectOption("30d");
+  await page.getByRole("combobox", { name: "Date range", exact: true }).click();
+  await page.getByRole("option", { name: "Last 30 days", exact: true }).click();
   await page
     .getByRole("button", { name: "Acquisition", exact: true })
     .first()
@@ -107,6 +105,56 @@ test("passkey signup, projects, live metrics, login and account deletion", async
     .get(`/api/workspaces/${workspaceId}/sites`)
     .then((r) => r.json());
   const siteId = sites[0].id;
+
+  for (const [label, status] of [
+    ["Paused", "paused"],
+    ["Active", "active"],
+  ]) {
+    await page
+      .getByRole("combobox", { name: "Collection", exact: true })
+      .click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().endsWith(`/sites/${siteId}`),
+    );
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect((await (await saved).json()).status).toBe(status);
+  }
+  await page.getByLabel("Project logo", { exact: true }).setInputFiles({
+    name: "test-project.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  const projectPicker = page.getByRole("combobox", {
+    name: "Project",
+    exact: true,
+  });
+  await expect(projectPicker).toContainText("Browser test");
+  await expect(projectPicker.locator("img")).toBeVisible();
+  await expect
+    .poll(() =>
+      projectPicker
+        .locator("img")
+        .evaluate(
+          (image) =>
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
+  await projectPicker.click();
+  await expect(
+    page.getByRole("option", { name: /Browser test/ }).locator("img"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   const tracked = await context.newPage();
   const payloads: Record<string, unknown>[] = [];
   await tracked.route("**/v1/collect", async (route) => {
@@ -223,11 +271,12 @@ test("passkey signup, projects, live metrics, login and account deletion", async
     )
       mismatches.push(request.url());
   });
+  await page.getByRole("combobox", { name: "Workspace", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Workspace", exact: true })
-    .selectOption(secondId);
+    .getByRole("option", { name: "Second browser workspace", exact: true })
+    .click();
   await expect(
-    page.getByRole("combobox", { name: "Website", exact: true }),
+    page.getByRole("combobox", { name: "Project", exact: true }),
   ).toContainText("second.example");
   expect(mismatches).toEqual([]);
   await page.getByRole("button", { name: "Projects", exact: true }).click();
@@ -403,13 +452,15 @@ test("public product pages, signup links and privacy choices work on desktop and
   const preview = page.getByLabel("Sample Analytica report");
   const firstTotals = await preview.getByRole("status").innerText();
   await page
-    .getByLabel("Sample report period", { exact: true })
-    .selectOption("30d");
+    .getByRole("combobox", { name: "Sample report period", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Last 30 days", exact: true }).click();
   await expect(preview.getByRole("status")).not.toHaveText(firstTotals);
   await expect(preview.getByRole("img")).toHaveAccessibleName(/30 days/);
   await page
-    .getByLabel("Sample project", { exact: true })
-    .selectOption("demo-fieldnotes");
+    .getByRole("combobox", { name: "Sample project", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Fieldnotes", exact: true }).click();
   await expect(
     preview.getByText("fieldnotes.example", { exact: true }),
   ).toBeVisible();

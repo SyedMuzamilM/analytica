@@ -18,7 +18,7 @@ Headings and the wordmark use Plus Jakarta Sans. Body text and the interface use
 
 The wordmark uses weight 800 and tracking of `-0.095em` so the letters touch. Its teal dot has normal tracking to keep the final glyph inside the wordmark's bounds. Apply this treatment to both the navigation logo and the large footer wordmark.
 
-`product.css` owns shared tokens, Kumo theme integration, account screens, and console extensions. `marketing.css` owns public pages and their responsive layouts. `styles.css` contains the underlying report and application layouts.
+`product.css` owns shared tokens, Kumo theme integration, account screens, and console extensions. `marketing.css` owns public pages and their responsive layouts. `styles.css` contains the underlying report and application layouts. `dropdowns.css` styles the shared `SelectField` control and its workspace, project, and date-range variants.
 
 Kumo computes emphasis colors inside each button. Set its `--color-kumo-brand` token, rather than only overriding the inherited button background. Its emphasis overlay uses the final variant color as a flat fill, preserving destructive variants.
 
@@ -55,6 +55,8 @@ Product imagery consists of three functional interface fragments. Stock photogra
 ## Accessibility and maintenance
 
 Public body copy starts at 16px. Forms, report fragments, and navigation retain smaller interface sizes. Keep long copy within its existing measure. Use the shared colors for new controls and charts; retain semantic success, warning, and error colors.
+
+All dropdowns use the shared Kumo-based `SelectField`, with keyboard navigation, type-ahead, accessible labels, and native form values. Project choices show the project name, domain, and uploaded image or fallback icon. Dropdowns opened inside native dialogs portal into that dialog so they remain interactive in the browser top layer. The application root isolates its stacking context so ordinary portaled menus appear over fixed navigation.
 
 The public header has an expandable mobile menu. Privacy tabs support arrow keys, Home, End, selection, focus, and panel relationships. Report totals announce changes. Public pages include a skip link and visible keyboard focus.
 

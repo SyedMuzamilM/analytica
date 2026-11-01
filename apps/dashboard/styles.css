@@ -16,14 +16,12 @@ body {
   margin: 0;
 }
 button,
-input,
-select {
+input {
   font: inherit;
 }
 button,
 a,
-input,
-select {
+input {
   -webkit-tap-highlight-color: transparent;
 }
 button {
@@ -42,13 +40,11 @@ button {
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
-select:focus-visible {
+input:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
-button,
-select {
+button {
   touch-action: manipulation;
 }
 h1,
@@ -213,8 +209,7 @@ strong {
   background: var(--canvas);
   color: var(--accent);
 }
-input,
-select {
+input {
   width: 100%;
   color: var(--ink);
   background: #fff;
@@ -224,15 +219,13 @@ select {
   padding: 0 11px;
   outline: none;
 }
-input:focus,
-select:focus {
+input:focus {
   border-color: var(--accent);
 }
 input::placeholder {
   color: var(--muted);
 }
-input:disabled,
-select:disabled {
+input:disabled {
   background: var(--canvas);
 }
 input[readonly] {
@@ -245,8 +238,7 @@ label {
   font-weight: 550;
   color: var(--ink);
 }
-label input,
-label select {
+label input {
   margin-top: 7px;
 }
 label small {
@@ -319,17 +311,6 @@ form > label {
   display: inline-flex;
   margin: 0 15px 31px;
 }
-.workspace-switch {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 10px 9px;
-  margin: 0 0 28px;
-  min-height: 58px;
-  position: relative;
-}
 .workspace-avatar {
   display: grid;
   place-items: center;
@@ -342,34 +323,6 @@ form > label {
   width: 31px;
   flex: none;
   font-weight: 600;
-}
-.workspace-switch > span:nth-child(2) {
-  min-width: 0;
-  flex: 1;
-}
-.workspace-label {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
-  display: block;
-  line-height: 1.2;
-}
-.workspace-switch select {
-  padding: 0;
-  border: 0;
-  font-size: 11px;
-  font-weight: 550;
-  min-height: 19px;
-  height: 19px;
-  max-width: 135px;
-  margin: 3px 0 0;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-.workspace-switch > svg {
-  flex: none;
-  color: var(--muted);
 }
 .nav-section-label {
   color: var(--muted);
@@ -536,33 +489,6 @@ form > label {
   gap: 8px;
   min-width: 0;
 }
-.site-favicon {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-  border: 1px solid var(--accent-soft);
-  border-radius: 5px;
-  height: 23px;
-  width: 23px;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  flex: none;
-}
-.site-switch select {
-  border: 0;
-  background: none;
-  padding: 0;
-  appearance: none;
-  min-height: 28px;
-  font-size: 11px;
-  max-width: 200px;
-  cursor: pointer;
-}
-.site-switch > svg {
-  color: var(--muted);
-  flex: none;
-}
 .connection-label {
   color: var(--muted);
   font-size: 11px;
@@ -650,29 +576,6 @@ h1 + .page-heading {
   height: 32px;
   border: 1px solid #e0e6ee;
   background: white;
-}
-.period-select {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: white;
-  padding: 0 10px;
-  height: 34px;
-  color: #8491a3;
-  box-shadow: 0 1px 2px #1b304405;
-}
-.period-select select {
-  border: 0;
-  min-height: 30px;
-  height: 30px;
-  font-size: 11px;
-  padding: 0 3px;
-  margin: 0;
-  appearance: none;
-  cursor: pointer;
-  width: 91px;
 }
 .report-toolbar {
   display: flex;
@@ -1933,13 +1836,6 @@ body:has(dialog[open]) {
   .brand-link {
     margin-left: 10px;
   }
-  .workspace-switch {
-    gap: 7px;
-    padding: 9px 7px;
-  }
-  .workspace-switch select {
-    max-width: 123px;
-  }
   .nav-item {
     padding-left: 11px;
     gap: 9px;
@@ -2020,19 +1916,9 @@ body:has(dialog[open]) {
   .brand-link {
     margin-left: 10px;
   }
-  .workspace-switch {
-    padding: 9px 6px;
-  }
   .workspace-avatar {
     width: 27px;
     height: 27px;
-  }
-  .workspace-switch select {
-    max-width: 103px;
-    font-size: 11px;
-  }
-  .workspace-switch > svg {
-    width: 11px;
   }
   .nav-shortcut {
     display: none;
@@ -2217,10 +2103,6 @@ body:has(dialog[open]) {
     height: 31px;
     width: 31px;
   }
-  .sidebar .workspace-switch select {
-    max-width: 137px;
-    font-size: 11px;
-  }
   .sidebar .nav-item {
     font-size: 12px;
   }
@@ -2260,10 +2142,6 @@ body:has(dialog[open]) {
     padding: 0 8px;
     font-size: 11px;
     min-height: 30px;
-  }
-  .site-switch select {
-    font-size: 11px;
-    max-width: 155px;
   }
   .demo-banner {
     padding: 10px 20px;
@@ -2315,21 +2193,6 @@ body:has(dialog[open]) {
   }
   .page-actions > .refresh-button {
     display: none;
-  }
-  .period-select {
-    height: 32px;
-    padding: 0 8px;
-    gap: 5px;
-  }
-  .period-select select {
-    width: 79px;
-    font-size: 11px;
-  }
-  .period-select > svg:first-child {
-    width: 13px;
-  }
-  .period-select > svg:last-child {
-    width: 11px;
   }
   .report-freshness {
     font-size: 10px;
@@ -2663,17 +2526,8 @@ body:has(dialog[open]) {
     width: 29px;
     padding: 0;
   }
-  .site-switch select {
-    max-width: 160px;
-  }
   .page-heading h1 {
     font-size: 23px;
-  }
-  .period-select {
-    padding: 0 6px;
-  }
-  .period-select > svg:first-child {
-    display: none;
   }
   .page-heading p {
     font-size: 11px;
@@ -2748,11 +2602,6 @@ body:has(dialog[open]) {
   margin: 3px 0 22px;
   color: #8b98ab;
   font-size: 11px;
-}
-.revenue-heading select {
-  width: 92px;
-  font-size: 11px;
-  min-height: 32px;
 }
 .money-value {
   font-size: 25px;
@@ -3033,10 +2882,6 @@ body:has(dialog[open]) {
 .invite-form > label {
   margin-top: 16px;
   font-size: 11px;
-}
-.invite-form > label > select {
-  font-size: 11px;
-  min-height: 36px;
 }
 .invite-form > small {
   display: block;

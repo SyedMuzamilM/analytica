@@ -5,6 +5,7 @@ import "@cloudflare/kumo/styles/standalone";
 import "./styles.css";
 import "./product.css";
 import "./marketing.css";
+import "./dropdowns.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

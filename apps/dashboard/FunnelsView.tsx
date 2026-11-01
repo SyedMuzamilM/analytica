@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ArrowDown, Plus, Trash2 } from "lucide-react";
 import type { Site, Workspace } from "../../packages/contracts";
 import { api, friendlyError, post, formatNumber } from "./api";
+import { SelectField } from "./SelectField";
 interface Step {
   type: "pageview" | "goal";
   value: string;
@@ -167,22 +168,21 @@ export function FunnelsView({
                 <span>{i + 1}</span>
                 <label>
                   Step type
-                  <select
-                    aria-label={`Step ${i + 1} type`}
+                  <SelectField
+                    label={`Step ${i + 1} type`}
                     value={step.type}
-                    onChange={(e) =>
+                    onValueChange={(value) =>
                       setSteps((old) =>
-                        old.map((s, j) =>
-                          i === j
-                            ? { ...s, type: e.target.value as Step["type"] }
-                            : s,
+                        old.map((item, j) =>
+                          i === j ? { ...item, type: value } : item,
                         ),
                       )
                     }
-                  >
-                    <option value="pageview">Page visited</option>
-                    <option value="goal">Goal completed</option>
-                  </select>
+                    options={[
+                      { value: "pageview", label: "Page visited" },
+                      { value: "goal", label: "Goal completed" },
+                    ]}
+                  />
                 </label>
                 <label>
                   Exact value
@@ -246,16 +246,15 @@ export function FunnelsView({
           <div className="feature-select">
             <label>
               Funnel
-              <select
+              <SelectField
+                label="Funnel"
                 value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                {funnels.map((f) => (
-                  <option value={f.id} key={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setSelected}
+                options={funnels.map((funnel) => ({
+                  value: funnel.id,
+                  label: funnel.name,
+                }))}
+              />
             </label>
             {workspace.role !== "viewer" && (
               <button

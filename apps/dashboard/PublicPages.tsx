@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Brand } from "./Brand";
 import { demoReport, demoSites } from "./demo";
+import { SelectField } from "./SelectField";
 
 const number = new Intl.NumberFormat("en-US");
 
@@ -124,31 +125,24 @@ function ReportPreview() {
         </div>
         <div className="preview-controls">
           <span className="preview-sample">Sample data</span>
-          <label className="sr-only" htmlFor="preview-project">
-            Sample project
-          </label>
-          <select
-            id="preview-project"
+          <SelectField
+            label="Sample project"
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-          >
-            {demoSites.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <label className="sr-only" htmlFor="preview-period">
-            Sample report period
-          </label>
-          <select
-            id="preview-period"
+            onValueChange={setProjectId}
+            options={demoSites.map((project) => ({
+              value: project.id,
+              label: project.name,
+            }))}
+          />
+          <SelectField
+            label="Sample report period"
             value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
+            onValueChange={setPeriod}
+            options={[
+              { value: "7d", label: "Last 7 days" },
+              { value: "30d", label: "Last 30 days" },
+            ]}
+          />
         </div>
       </div>
       <div className="preview-body">

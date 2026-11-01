@@ -14,6 +14,7 @@ import {
 import type { Workspace } from "../../packages/contracts";
 import { api, friendlyError, post } from "./api";
 import { DeleteAccount } from "./DeleteAccount";
+import { SelectField } from "./SelectField";
 
 interface Member {
   userId: string;
@@ -438,18 +439,23 @@ export function AccountView({
               </p>
               <label>
                 Invitation role
-                <select
-                  aria-label="Invitation role"
+                <SelectField
+                  label="Invitation role"
                   value={role}
-                  onChange={(event) =>
-                    setRole(event.target.value as "admin" | "viewer")
-                  }
-                >
-                  <option value="viewer">Viewer: read reports</option>
-                  <option value="admin">
-                    Admin: manage websites and integrations
-                  </option>
-                </select>
+                  onValueChange={setRole}
+                  options={[
+                    {
+                      value: "viewer",
+                      label: "Viewer",
+                      description: "Read reports",
+                    },
+                    {
+                      value: "admin",
+                      label: "Admin",
+                      description: "Manage websites and integrations",
+                    },
+                  ]}
+                />
               </label>
               <small>
                 {role === "admin"

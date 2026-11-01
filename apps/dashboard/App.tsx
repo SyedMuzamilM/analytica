@@ -14,7 +14,6 @@ import {
   ArrowUpRight,
   CalendarDays,
   Check,
-  ChevronDown,
   CircleHelp,
   Copy,
   Download,
@@ -58,7 +57,8 @@ import { RevenueView } from "./RevenueView";
 import { AccountView } from "./AccountView";
 import { FunnelsView } from "./FunnelsView";
 import { JourneysView } from "./JourneysView";
-import { ProjectsView } from "./ProjectsView";
+import { ProjectsView, ProjectIcon } from "./ProjectsView";
+import { SelectField } from "./SelectField";
 import { ProjectImage } from "./ProjectImage";
 import { LayoutGrid } from "lucide-react";
 
@@ -711,11 +711,11 @@ function SiteModal({
         </label>
         <label>
           Reporting timezone
-          <select
+          <SelectField
+            label="Reporting timezone"
             name="timezone"
             defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
-          >
-            {[
+            options={[
               ...new Set([
                 Intl.DateTimeFormat().resolvedOptions().timeZone,
                 "UTC",
@@ -727,10 +727,8 @@ function SiteModal({
                 "Asia/Tokyo",
                 "Australia/Sydney",
               ]),
-            ].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
+            ].map((value) => ({ value, label: value }))}
+          />
         </label>
         <fieldset>
           <legend>How should this project measure traffic?</legend>
@@ -883,22 +881,13 @@ function SettingsView({
             </label>
             <label>
               Timezone
-              <select name="timezone" defaultValue={site.timezone} disabled>
-                {[
-                  ...new Set([
-                    site.timezone,
-                    "UTC",
-                    "America/New_York",
-                    "America/Los_Angeles",
-                    "Europe/London",
-                    "Europe/Berlin",
-                    "Asia/Kolkata",
-                    "Asia/Tokyo",
-                  ]),
-                ].map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
+              <SelectField
+                label="Timezone"
+                name="timezone"
+                defaultValue={site.timezone}
+                disabled
+                options={[{ value: site.timezone, label: site.timezone }]}
+              />
               <small>
                 The reporting timezone is fixed for this website to keep
                 historical totals consistent.
@@ -906,14 +895,16 @@ function SettingsView({
             </label>
             <label>
               Collection
-              <select
+              <SelectField
+                label="Collection"
                 name="status"
                 defaultValue={site.status}
                 disabled={!canEdit}
-              >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-              </select>
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "paused", label: "Paused" },
+                ]}
+              />
               <small>
                 Pausing stops browser events and money intake. Payment
                 deliveries may expire if the provider stops retrying.
@@ -1327,37 +1318,35 @@ export function App() {
         >
           <Brand small />
         </a>
-        <label className="workspace-switch">
-          <span className="workspace-avatar">
-            {workspace?.name.slice(0, 1) ?? "A"}
-          </span>
-          <span>
-            <span className="workspace-label">Workspace</span>
-            <select
-              aria-label="Workspace"
-              value={workspace?.id ?? ""}
-              onChange={(event) => {
-                setSites([]);
-                update({
-                  workspace: event.target.value,
-                  site: null,
-                  source: null,
-                  path: null,
-                  country: null,
-                  device: null,
-                  event: null,
-                });
-              }}
-            >
-              {workspaces.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </span>
-          <ChevronDown size={14} />
-        </label>
+        <div className="workspace-switch">
+          <SelectField
+            label="Workspace"
+            caption="Workspace"
+            className="workspace-select"
+            value={workspace?.id ?? ""}
+            options={workspaces.map((item) => ({
+              value: item.id,
+              label: item.name,
+              icon: (
+                <span className="workspace-avatar" aria-hidden="true">
+                  {item.name.slice(0, 1)}
+                </span>
+              ),
+            }))}
+            onValueChange={(value) => {
+              setSites([]);
+              update({
+                workspace: value,
+                site: null,
+                source: null,
+                path: null,
+                country: null,
+                device: null,
+                event: null,
+              });
+            }}
+          />
+        </div>
         <button
           className={`workspace-manage ${view === "account" ? "selected" : ""}`}
           onClick={() => changeView("account")}
@@ -1466,15 +1455,20 @@ export function App() {
               Workspace<span>/</span>
             </span>
             <div className="site-switch">
-              <span className="site-favicon">
-                {site?.name.slice(0, 1) ?? <Globe size={14} />}
-              </span>
-              <select
-                aria-label="Website"
+              <SelectField
+                label="Project"
+                className="project-select"
                 value={site?.id ?? ""}
-                onChange={(event) =>
+                placeholder="No projects yet"
+                options={availableSites.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                  description: item.domain,
+                  icon: <ProjectIcon site={item} />,
+                }))}
+                onValueChange={(value) =>
                   update({
-                    site: event.target.value,
+                    site: value,
                     source: null,
                     path: null,
                     country: null,
@@ -1482,15 +1476,7 @@ export function App() {
                     event: null,
                   })
                 }
-              >
-                {!availableSites.length && <option>No websites yet</option>}
-                {availableSites.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.domain}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} />
+              />
             </div>
           </div>
           <div className="topbar-right">
@@ -1561,21 +1547,18 @@ export function App() {
                     >
                       <RefreshCw size={16} />
                     </button>
-                    <label className="period-select">
-                      <CalendarDays size={15} />
-                      <select
-                        aria-label="Date range"
-                        value={period}
-                        onChange={(event) =>
-                          update({ period: event.target.value })
-                        }
-                      >
-                        <option value="7d">Last 7 days</option>
-                        <option value="30d">Last 30 days</option>
-                        <option value="90d">Last 90 days</option>
-                      </select>
-                      <ChevronDown size={13} />
-                    </label>
+                    <SelectField
+                      label="Date range"
+                      className="date-select"
+                      value={period}
+                      icon={<CalendarDays size={15} />}
+                      onValueChange={(value) => update({ period: value })}
+                      options={[
+                        { value: "7d", label: "Last 7 days" },
+                        { value: "30d", label: "Last 30 days" },
+                        { value: "90d", label: "Last 90 days" },
+                      ]}
+                    />
                   </>
                 )}
             </div>
