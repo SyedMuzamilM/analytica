@@ -14,3 +14,5 @@ coverage/
 *.log
 
 output/playwright/
+
+.taste-skill/

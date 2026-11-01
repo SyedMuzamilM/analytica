@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { AuthStatus } from "../../packages/contracts";
 import { friendlyError, post } from "./api";
+import { Brand } from "./Brand";
 
 type RegistrationOptions = Parameters<
   typeof startRegistration
@@ -22,21 +23,6 @@ type AuthenticationOptions = Parameters<
   typeof startAuthentication
 >[0]["optionsJSON"];
 type Flow = "login" | "signup" | "setup" | "recovery" | "invite";
-
-export function Brand({ small = false }: { small?: boolean }) {
-  return (
-    <span className={`brand ${small ? "brand-small" : ""}`}>
-      <span className="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <path d="M6 17v-4m6 4V8m6 9V4" />
-        </svg>
-      </span>
-      <span>
-        analytica<span className="brand-period">.</span>
-      </span>
-    </span>
-  );
-}
 
 export function AuthScreen({
   status,
@@ -135,10 +121,10 @@ export function AuthScreen({
       </header>
       <main className="account-entry-layout">
         <section className="account-entry-story">
-          <span className="product-eyebrow">Your products, understood.</span>
           <h1>
-            A clear view.
-            <br />A better next move.
+            Your next idea,
+            <br />
+            understood.
           </h1>
           <p>
             Bring your websites, apps and product events into a workspace that
@@ -161,7 +147,7 @@ export function AuthScreen({
           <div className="account-story-note">
             <ShieldCheck size={21} />
             <span>
-              Secure by default.
+              Sign in with a passkey.
               <br />
               <small>Your passkey stays with your device.</small>
             </span>

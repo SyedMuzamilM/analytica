@@ -400,9 +400,34 @@ test("public product pages, signup links and privacy choices work on desktop and
   await expect(
     page.getByRole("heading", { name: /Know your traffic/ }),
   ).toBeVisible();
+  const preview = page.getByLabel("Sample Analytica report");
+  const firstTotals = await preview.getByRole("status").innerText();
+  await page
+    .getByLabel("Sample report period", { exact: true })
+    .selectOption("30d");
+  await expect(preview.getByRole("status")).not.toHaveText(firstTotals);
+  await expect(preview.getByRole("img")).toHaveAccessibleName(/30 days/);
+  await page
+    .getByLabel("Sample project", { exact: true })
+    .selectOption("demo-fieldnotes");
+  await expect(
+    preview.getByText("fieldnotes.example", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    preview.getByRole("link", { name: "Explore this report" }),
+  ).toHaveAttribute("href", "/demo?site=demo-fieldnotes&period=30d");
   await page.getByRole("tab", { name: "Attribution", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toContainText(
     "Journeys after explicit consent",
+  );
+  await page
+    .getByRole("tab", { name: "Attribution", exact: true })
+    .press("ArrowLeft");
+  await expect(
+    page.getByRole("tab", { name: "Aggregate", exact: true }),
+  ).toBeFocused();
+  await expect(page.getByRole("tabpanel")).toContainText(
+    "Traffic without persistent visitor IDs",
   );
   await page.screenshot({
     path: "output/playwright/landing-desktop.png",
@@ -414,6 +439,14 @@ test("public product pages, signup links and privacy choices work on desktop and
       () => document.documentElement.scrollWidth <= innerWidth + 2,
     ),
   ).toBe(true);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Product navigation" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Product navigation" }),
+  ).toBeHidden();
   await page.screenshot({
     path: "output/playwright/landing-mobile.png",
     fullPage: true,

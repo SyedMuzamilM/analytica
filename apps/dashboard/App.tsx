@@ -51,7 +51,8 @@ import {
   friendlyError,
   post,
 } from "./api";
-import { AuthScreen, Brand } from "./AuthScreen";
+import { AuthScreen } from "./AuthScreen";
+import { Brand } from "./Brand";
 import { demoReport, demoSites } from "./demo";
 import { RevenueView } from "./RevenueView";
 import { AccountView } from "./AccountView";
@@ -402,8 +403,8 @@ function Chart({
           >
             <defs>
               <linearGradient id="trafficFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#315bd8" stopOpacity=".12" />
-                <stop offset="1" stopColor="#315bd8" stopOpacity=".008" />
+                <stop offset="0" stopColor="var(--accent)" stopOpacity=".12" />
+                <stop offset="1" stopColor="var(--accent)" stopOpacity=".008" />
               </linearGradient>
             </defs>
             {[0, 1, 2, 3, 4].map((index) => (
@@ -413,7 +414,7 @@ function Chart({
                 x2={width}
                 y1={top + ((bottom - top) * index) / 4}
                 y2={top + ((bottom - top) * index) / 4}
-                stroke="#e9edf3"
+                stroke="var(--line)"
                 strokeDasharray={index === 4 ? undefined : "3 5"}
               />
             ))}
@@ -421,7 +422,7 @@ function Chart({
             <path
               d={line}
               fill="none"
-              stroke="#315bd8"
+              stroke="var(--accent)"
               strokeWidth="2.4"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -434,14 +435,14 @@ function Chart({
                   x2={coords[hover].x}
                   y1={top}
                   y2={bottom}
-                  stroke="#becbf0"
+                  stroke="var(--accent-soft)"
                   strokeDasharray="4 4"
                 />
                 <circle
                   cx={coords[hover].x}
                   cy={coords[hover].y}
                   r="4"
-                  fill="#315bd8"
+                  fill="var(--accent)"
                   stroke="white"
                   strokeWidth="2"
                 />

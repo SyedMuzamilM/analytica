@@ -1,282 +1,391 @@
-import { useEffect, useState } from "react";
-import { LinkButton, Button } from "@cloudflare/kumo/components/button";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import {
-  ArrowRight,
   ArrowUpRight,
   Check,
-  Code2,
   Fingerprint,
   Globe,
   Layers,
   ShieldCheck,
 } from "lucide-react";
-import { Brand } from "./AuthScreen";
+import { Brand } from "./Brand";
+import { demoReport, demoSites } from "./demo";
 
-const sample = [
-  24, 38, 30, 45, 35, 58, 51, 67, 49, 77, 63, 90, 72, 81, 66, 99, 82, 105, 95,
-  117, 102, 130, 114, 142, 127, 158, 135, 170,
-];
+const number = new Intl.NumberFormat("en-US");
 
 function PublicHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header className="public-header">
       <a href="/" aria-label="Analytica home">
         <Brand />
       </a>
-      <nav aria-label="Product navigation">
-        <a href="/#product">Product</a>
+      <button
+        className="public-menu-toggle"
+        aria-expanded={menuOpen}
+        aria-controls="public-navigation"
+        onClick={() => setMenuOpen(!menuOpen)}
+      >
+        {menuOpen ? "Close" : "Menu"}
+      </button>
+      <nav
+        id="public-navigation"
+        className={menuOpen ? "is-open" : ""}
+        aria-label="Product navigation"
+      >
+        <a href="/#product" onClick={() => setMenuOpen(false)}>
+          Product
+        </a>
         <a href="/docs">Documentation</a>
-        <a href="/#privacy">Privacy</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/demo">Live demo</a>
       </nav>
-      <div>
-        <LinkButton href="/login" variant="ghost">
+      <div className="public-header-actions">
+        <a href="/login" className="public-login">
           Log in
-        </LinkButton>
-        <LinkButton href="/signup" variant="primary">
-          Create account <ArrowRight size={15} />
-        </LinkButton>
+        </a>
+        <a href="/signup" className="public-button">
+          Create account
+        </a>
       </div>
     </header>
   );
 }
+
 function PublicFooter() {
   return (
     <footer className="public-footer">
-      <div>
-        <a href="/">
-          <Brand small />
-        </a>
-        <p>Understand your products. Keep control of your data.</p>
+      <div className="footer-top">
+        <p>
+          Made for the things
+          <br />
+          you're building.
+        </p>
+        <nav aria-label="Footer">
+          <a href="/docs">Documentation</a>
+          <a href="/privacy">Privacy & data</a>
+          <a
+            href="https://github.com/SyedMuzamilM/analytica"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Source code <ArrowUpRight size={15} />
+          </a>
+          <a href="https://mzml.dev" target="_blank" rel="noreferrer">
+            Built by MZML <ArrowUpRight size={15} />
+          </a>
+        </nav>
       </div>
-      <nav aria-label="Footer">
-        <a href="/docs">Documentation</a>
-        <a href="/privacy">Privacy & data</a>
-        <a
-          href="https://github.com/SyedMuzamilM/analytica"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Source code <ArrowUpRight size={13} />
-        </a>
-      </nav>
-      <span>© {new Date().getFullYear()} Analytica</span>
+      <a href="/" className="footer-wordmark" aria-label="Analytica home">
+        analytica.
+      </a>
+      <div className="footer-bottom">
+        <span>© {new Date().getFullYear()} Analytica</span>
+        <span>Your products. Your data.</span>
+      </div>
     </footer>
+  );
+}
+
+function ReportPreview() {
+  const [projectId, setProjectId] = useState("demo-orbit");
+  const [period, setPeriod] = useState("7d");
+  const site = demoSites.find((item) => item.id === projectId) ?? demoSites[0];
+  const report = useMemo(
+    () => demoReport(new URLSearchParams({ period }), site),
+    [period, site],
+  );
+  const ceiling =
+    Math.max(...report.series.map((point) => point.pageviews), 1) * 1.15;
+  const points = report.series.map(
+    (point, index) =>
+      `${(index / Math.max(1, report.series.length - 1)) * 800},${180 - (point.pageviews / ceiling) * 170}`,
+  );
+  const date = (value: string) =>
+    new Date(`${value}T12:00:00Z`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  return (
+    <div
+      className="product-preview"
+      data-ui
+      aria-label="Sample Analytica report"
+    >
+      <div className="preview-heading">
+        <div className="preview-project">
+          <span className="project-symbol">
+            <Globe size={20} />
+          </span>
+          <div>
+            <strong>{site.name}</strong>
+            <span>{site.domain}</span>
+          </div>
+        </div>
+        <div className="preview-controls">
+          <span className="preview-sample">Sample data</span>
+          <label className="sr-only" htmlFor="preview-project">
+            Sample project
+          </label>
+          <select
+            id="preview-project"
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+          >
+            {demoSites.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="preview-period">
+            Sample report period
+          </label>
+          <select
+            id="preview-period"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value)}
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </div>
+      </div>
+      <div className="preview-body">
+        <div className="preview-traffic">
+          <div className="preview-metrics" role="status" aria-atomic="true">
+            {(
+              [
+                { key: "pageviews", label: "Pageviews" },
+                { key: "sessions", label: "Sessions" },
+                { key: "goals", label: "Goals" },
+              ] as const
+            ).map(({ key, label }) => (
+              <div key={key}>
+                <span>{label}</span>
+                <strong>{number.format(report.current[key])}</strong>
+                <small>{report.range.label.toLowerCase()}</small>
+              </div>
+            ))}
+          </div>
+          <svg
+            className="preview-chart"
+            viewBox="0 0 800 200"
+            role="img"
+            aria-label={`${number.format(report.current.pageviews)} sample pageviews over ${report.series.length} days`}
+            preserveAspectRatio="none"
+          >
+            {[40, 100, 160].map((y) => (
+              <line
+                key={y}
+                x1="0"
+                x2="800"
+                y1={y}
+                y2={y}
+                stroke="var(--line)"
+                strokeDasharray="3 6"
+              />
+            ))}
+            <polygon
+              points={`0,200 ${points.join(" ")} 800,200`}
+              fill="var(--accent-soft)"
+            />
+            <polyline
+              points={points.join(" ")}
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          <div className="preview-axis">
+            <span>{date(report.series[0].date)}</span>
+            <span>
+              {date(report.series[Math.floor(report.series.length / 2)].date)}
+            </span>
+            <span>{date(report.series[report.series.length - 1].date)}</span>
+          </div>
+        </div>
+        <div className="preview-sources">
+          <div>
+            <strong>Top sources</strong>
+            <span>Pageviews</span>
+          </div>
+          {report.sources.slice(0, 5).map((source) => (
+            <div className="preview-source-row" key={source.name}>
+              <span
+                className="preview-source-fill"
+                style={{
+                  width: `${(source.count / Math.max(1, report.sources[0].count)) * 100}%`,
+                }}
+              />
+              <span>{source.name}</span>
+              <strong>{number.format(source.count)}</strong>
+            </div>
+          ))}
+          <a href={`/demo?site=${site.id}&period=${period}`}>
+            Explore this report <ArrowUpRight size={15} />
+          </a>
+        </div>
+      </div>
+      <div className="preview-bottom">
+        <span>Try a different project or date range.</span>
+        <span>Demo data, never customer data.</span>
+      </div>
+    </div>
   );
 }
 
 export function LandingPage() {
   const [mode, setMode] = useState<"aggregate" | "attribution">("aggregate");
   useEffect(() => {
-    document.title = "Analytica · Know what brings people back";
+    document.title = "Analytica · Know your traffic";
   }, []);
+  function switchMode(event: KeyboardEvent<HTMLButtonElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next =
+      event.key === "Home"
+        ? "aggregate"
+        : event.key === "End"
+          ? "attribution"
+          : mode === "aggregate"
+            ? "attribution"
+            : "aggregate";
+    setMode(next);
+    document.getElementById(`privacy-${next}`)?.focus();
+  }
   return (
     <div className="public-site">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <PublicHeader />
-      <main>
+      <main id="main-content">
         <section className="marketing-hero" id="product">
-          <div className="hero-copy">
-            <span className="product-eyebrow">
-              <span />
-              Analytics for the products you build
-            </span>
+          <div className="hero-intro">
             <h1>
               Know your traffic.
               <br />
-              <span>Find your next move.</span>
+              See what works.
             </h1>
-            <p>
-              One place for your websites, product events and revenue. See
-              what's working, follow the journey, and make the next decision
-              with confidence.
-            </p>
-            <div className="hero-actions">
-              <LinkButton href="/signup" variant="primary" size="lg">
-                Create your account <ArrowRight size={17} />
-              </LinkButton>
-              <LinkButton href="/demo" variant="secondary" size="lg">
-                Explore live demo
-              </LinkButton>
-            </div>
-            <div className="hero-footnote">
-              <Fingerprint size={16} />
-              Sign up with a passkey. No credit card.
+            <div className="hero-copy">
+              <p>
+                Analytics for every product you build. Understand your traffic,
+                goals and revenue, with control over what you collect.
+              </p>
+              <div className="hero-actions">
+                <a href="/signup" className="public-button light">
+                  Create your account
+                </a>
+                <a href="/demo" className="hero-demo-link">
+                  Explore live demo <ArrowUpRight size={17} />
+                </a>
+              </div>
+              <span className="hero-footnote">
+                <Fingerprint size={16} />
+                Passkey sign-in. No credit card.
+              </span>
             </div>
           </div>
-          <div
-            className="product-preview"
-            data-ui="true"
-            aria-label="Sample Analytica report"
-          >
-            <div className="preview-window-bar">
-              <Brand small />
-              <span>Sample project · Last 7 days</span>
-            </div>
-            <div className="preview-project">
-              <span className="project-symbol">
-                <Globe size={20} />
-              </span>
-              <div>
-                <strong>Your next great product</strong>
-                <span>Website overview</span>
-              </div>
-              <span className="preview-live">Sample data</span>
-            </div>
-            <div className="preview-metrics">
-              <div>
-                <span>Pageviews</span>
-                <strong>12,480</strong>
-                <small>↑ 18.6%</small>
-              </div>
-              <div>
-                <span>Sessions</span>
-                <strong>8,216</strong>
-                <small>↑ 12.4%</small>
-              </div>
-              <div>
-                <span>Conversions</span>
-                <strong>386</strong>
-                <small>↑ 9.2%</small>
-              </div>
-            </div>
-            <div
-              className="preview-chart"
-              role="img"
-              aria-label="Illustrative traffic chart, not customer data"
-            >
-              <div className="preview-grid" />
-              {sample.map((height, i) => (
-                <span key={i} style={{ height: `${height}px` }} />
-              ))}
-            </div>
-            <div className="preview-axis">
-              <span>Mon</span>
-              <span>Tue</span>
-              <span>Wed</span>
-              <span>Thu</span>
-              <span>Fri</span>
-              <span>Sat</span>
-              <span>Sun</span>
-            </div>
-            <div className="preview-bottom">
-              <span>
-                <span className="orange-dot" />
-                Pageviews
-              </span>
-              <a href="/demo">
-                Open the interactive demo <ArrowRight size={13} />
-              </a>
-            </div>
-          </div>
+          <ReportPreview />
         </section>
-        <div className="product-strip">
-          <span>
-            <Layers size={19} />A home for every project
-          </span>
-          <span>
-            <ShieldCheck size={19} />
-            Explicit privacy controls
-          </span>
-          <span>
-            <Code2 size={19} />A small script to get started
-          </span>
-        </div>
         <section className="feature-story">
-          <div>
-            <span className="section-index">
-              01 / A portfolio, not a pile of tabs
-            </span>
-            <h2>
-              Every product.
-              <br />
-              Its own clear picture.
-            </h2>
+          <div className="story-copy">
+            <h2>Room for every idea.</h2>
             <p>
-              Keep your marketing site, desktop app and next experiment in
-              separate projects. Switch between reports without mixing traffic
-              or credentials.
+              A marketing site. A desktop app. The side project you keep coming
+              back to. Give each product its own reports, tracking ID and
+              settings, in one workspace.
             </p>
-            <a href="/signup">
-              Start with your first project <ArrowRight size={16} />
+            <a className="text-link" href="/signup">
+              Add your first project <ArrowUpRight size={18} />
             </a>
           </div>
-          <div className="project-example" data-ui="true">
-            <div>
-              <span className="example-project-icon orange">
-                <Globe size={21} />
-              </span>
-              <span>
-                <strong>Marketing website</strong>
-                <small>Traffic, sources and conversions</small>
-              </span>
-              <ArrowUpRight size={18} />
+          <div className="project-example" data-ui>
+            <div className="example-heading">
+              <span>Your workspace</span>
+              <Layers size={20} />
             </div>
-            <div>
-              <span className="example-project-icon blue">
-                <Layers size={21} />
-              </span>
-              <span>
-                <strong>Desktop application</strong>
-                <small>App opens and screen events</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-            <div>
-              <span className="example-project-icon green">
-                <Code2 size={21} />
-              </span>
-              <span>
-                <strong>Your next experiment</strong>
-                <small>A fresh project, ready when you are</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-            <span className="example-caption">
-              Each project has its own tracking ID and settings.
-            </span>
+            {demoSites.map((site, index) => (
+              <a
+                className="example-project"
+                href={`/demo?site=${site.id}`}
+                key={site.id}
+              >
+                <span
+                  className={`example-project-icon ${index === 0 ? "crimson" : "charcoal"}`}
+                >
+                  {site.name.slice(0, 1)}
+                </span>
+                <span>
+                  <strong>{site.name}</strong>
+                  <small>{site.domain}</small>
+                </span>
+                <span className="example-project-status">
+                  <span />
+                  Active
+                </span>
+                <ArrowUpRight size={18} />
+              </a>
+            ))}
+            <a href="/signup" className="example-add">
+              Your next project <span>+</span>
+            </a>
+            <p>Two sample projects. Open either to explore.</p>
           </div>
         </section>
         <section className="privacy-story" id="privacy">
-          <div>
-            <span className="section-index">02 / Choose what you measure</span>
-            <h2>
-              Useful analytics.
-              <br />
-              Deliberate privacy.
-            </h2>
+          <div className="story-copy">
+            <h2>Collect with intention.</h2>
             <p>
-              Start with aggregate traffic. Enable consent-controlled
-              attribution when you need visitor journeys. Export data, delete a
-              project, or delete your account from your settings.
+              Start with aggregate traffic. Turn on consent-controlled
+              attribution when you need visitor journeys. The choice belongs to
+              each project.
             </p>
-            <a href="/privacy">
-              Read about data and privacy <ArrowRight size={16} />
+            <a className="text-link" href="/privacy">
+              How your data is handled <ArrowUpRight size={18} />
             </a>
+            <div className="privacy-facts">
+              <span>
+                <Check size={17} />
+                Export your reports
+              </span>
+              <span>
+                <Check size={17} />
+                Delete projects and account data
+              </span>
+            </div>
           </div>
-          <div className="privacy-demo">
+          <div className="privacy-demo" data-ui>
             <div
               className="privacy-tabs"
               role="tablist"
               aria-label="Tracking privacy mode"
             >
-              <Button
-                role="tab"
-                aria-selected={mode === "aggregate"}
-                variant={mode === "aggregate" ? "primary" : "ghost"}
-                onClick={() => setMode("aggregate")}
-              >
-                Aggregate
-              </Button>
-              <Button
-                role="tab"
-                aria-selected={mode === "attribution"}
-                variant={mode === "attribution" ? "primary" : "ghost"}
-                onClick={() => setMode("attribution")}
-              >
-                Attribution
-              </Button>
+              {(["aggregate", "attribution"] as const).map((value) => (
+                <button
+                  key={value}
+                  id={`privacy-${value}`}
+                  role="tab"
+                  aria-selected={mode === value}
+                  aria-controls="privacy-panel"
+                  tabIndex={mode === value ? 0 : -1}
+                  onKeyDown={switchMode}
+                  onClick={() => setMode(value)}
+                >
+                  {value === "aggregate" ? "Aggregate" : "Attribution"}
+                </button>
+              ))}
             </div>
-            <div role="tabpanel">
-              <ShieldCheck size={30} />
+            <div
+              role="tabpanel"
+              id="privacy-panel"
+              aria-labelledby={`privacy-${mode}`}
+              tabIndex={0}
+            >
+              <ShieldCheck size={28} />
               <h3>
                 {mode === "aggregate"
                   ? "Traffic without persistent visitor IDs"
@@ -284,8 +393,8 @@ export function LandingPage() {
               </h3>
               <p>
                 {mode === "aggregate"
-                  ? "Measure pageviews, sources and goals. IDs live in document memory and reset on a full navigation."
-                  : "Follow sessions and visitor journeys only after your application grants consent. Opt-out clears the tracking identity."}
+                  ? "Measure pageviews, sources and goals. IDs live in memory and reset on a full navigation."
+                  : "Follow sessions and visitor journeys after your app grants consent. Withdrawing consent clears the tracking identity."}
               </p>
               <pre>
                 <code>
@@ -298,49 +407,46 @@ export function LandingPage() {
           </div>
         </section>
         <section className="setup-story">
-          <div className="setup-intro">
-            <span className="section-index">
-              03 / From account to first event
-            </span>
-            <h2>
-              Make your first
-              <br />
-              signal count.
-            </h2>
+          <div className="story-copy">
+            <h2>Your first signal.</h2>
             <p>
-              Explore the demo, create a test project, and verify your first
-              event before connecting a real product.
+              Go from a new account to a working report. Start with a test
+              project and check your first event before connecting your real
+              product.
             </p>
+            <a className="text-link" href="/docs">
+              Follow the setup guide <ArrowUpRight size={18} />
+            </a>
           </div>
           <ol className="setup-steps">
             <li>
-              <span>1</span>
               <div>
                 <h3>Create an account</h3>
-                <p>Use your device's passkey and save your recovery codes.</p>
+                <p>
+                  Sign up with your device's passkey and save your recovery
+                  codes.
+                </p>
               </div>
             </li>
             <li>
-              <span>2</span>
               <div>
-                <h3>Add a project</h3>
-                <p>Choose your domain, reporting timezone and privacy mode.</p>
+                <h3>Add your project</h3>
+                <p>Set your domain, reporting timezone and privacy mode.</p>
               </div>
             </li>
             <li>
-              <span>3</span>
               <div>
                 <h3>Connect and verify</h3>
                 <p>
-                  Copy your script or configure your app's collector. Check the
-                  first event in your overview.
+                  Install the script or configure your app's collector. Find
+                  your first event in the overview.
                 </p>
               </div>
             </li>
           </ol>
         </section>
         <section className="marketing-faq">
-          <h2>A few things to know.</h2>
+          <h2>Good to know.</h2>
           <div>
             <details>
               <summary>Can I track more than one product?</summary>
@@ -370,24 +476,19 @@ export function LandingPage() {
               <p>
                 Yes. Current default limits are 1,000 accepted event envelopes
                 per project per UTC day and 2,000 per installation. Engagement
-                updates also count. These limits keep this initial deployment
-                bounded.
+                updates also count.
               </p>
             </details>
           </div>
         </section>
         <section className="marketing-cta">
           <div>
-            <h2>
-              Build something.
-              <br />
-              Understand how it's used.
-            </h2>
-            <p>Your next project deserves more than guesswork.</p>
+            <h2>See your work at work.</h2>
+            <p>Connect your first project and find out how it's used.</p>
           </div>
-          <LinkButton href="/signup" variant="primary" size="lg">
-            Get started <ArrowRight size={17} />
-          </LinkButton>
+          <a href="/signup" className="public-button">
+            Create your account
+          </a>
         </section>
       </main>
       <PublicFooter />
@@ -404,7 +505,7 @@ export function DocumentationPage({ privacy = false }: { privacy?: boolean }) {
       <PublicHeader />
       <main className="documentation">
         <aside>
-          <span>ANALYTICA GUIDES</span>
+          <span>Analytica guides</span>
           <a href="/docs">Getting started</a>
           <a href="/docs#websites">Website tracking</a>
           <a href="/docs#applications">Desktop & mobile apps</a>
@@ -417,12 +518,7 @@ export function DocumentationPage({ privacy = false }: { privacy?: boolean }) {
         <article>
           {privacy ? (
             <>
-              <span className="section-index">Privacy & data</span>
-              <h1>
-                You choose what
-                <br />
-                your projects collect.
-              </h1>
+              <h1>Your data, your choice.</h1>
               <h2>Two explicit privacy modes</h2>
               <p>
                 Aggregate mode uses document-scoped IDs in memory. A full
@@ -464,12 +560,7 @@ export function DocumentationPage({ privacy = false }: { privacy?: boolean }) {
             </>
           ) : (
             <>
-              <span className="section-index">Getting started</span>
-              <h1>
-                Your first project,
-                <br />
-                from setup to signal.
-              </h1>
+              <h1>Your first project.</h1>
               <p className="doc-lead">
                 Use a separate project for each product and environment. Start
                 with a test project before enabling production collection.
@@ -538,9 +629,9 @@ export function DocumentationPage({ privacy = false }: { privacy?: boolean }) {
                 count too. Keep your recovery codes and a backup passkey, and
                 sign in again before changing account security.
               </p>
-              <LinkButton href="/app" variant="primary">
-                Open your projects <ArrowRight size={16} />
-              </LinkButton>
+              <a href="/app" className="public-button">
+                Open your projects <ArrowUpRight size={16} />
+              </a>
             </>
           )}
         </article>
