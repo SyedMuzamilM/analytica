@@ -18,7 +18,7 @@ const SESSION_MS = 7 * 86_400_000;
 const CHALLENGE_MS = 5 * 60_000;
 const encoder = new TextEncoder();
 const algorithms = [-7, -257];
-type Purpose = "setup" | "login" | "recovery" | "passkey" | "invite";
+type Purpose = "setup" | "signup" | "login" | "recovery" | "passkey" | "invite";
 interface Challenge {
   id: string;
   challenge: string;
@@ -390,8 +390,11 @@ export async function registerVerifiedCredential(
   ];
   let admission = markerSql;
   let admissionParams: unknown[] = [ch.id, marker];
-  if (ch.purpose === "setup") {
-    admission += " AND NOT EXISTS(SELECT 1 FROM setup_state)";
+  if (ch.purpose === "setup" || ch.purpose === "signup") {
+    admission +=
+      ch.purpose === "setup"
+        ? " AND NOT EXISTS(SELECT 1 FROM setup_state)"
+        : " AND (SELECT COUNT(*) FROM users)<100 AND (SELECT COUNT(*) FROM workspaces)<100";
     statements.push(
       db
         .prepare(
@@ -413,13 +416,14 @@ export async function registerVerifiedCredential(
         )
         .bind(userId, data.workspaceId, userId),
     );
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO setup_state(id,user_id,completed_at) SELECT 1,?,? WHERE EXISTS(SELECT 1 FROM users WHERE id=?)`,
-        )
-        .bind(userId, now, userId),
-    );
+    if (ch.purpose === "setup")
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO setup_state(id,user_id,completed_at) SELECT 1,?,? WHERE EXISTS(SELECT 1 FROM users WHERE id=?)`,
+          )
+          .bind(userId, now, userId),
+      );
     admission = `${markerSql} AND EXISTS(SELECT 1 FROM users WHERE id=? AND disabled_at IS NULL)`;
     admissionParams = [ch.id, marker, userId];
   } else if (ch.purpose === "recovery") {
@@ -645,7 +649,12 @@ authRoutes.use("*", async (c, next) => {
       { error: "This installation already has an owner. Sign in instead." },
       409,
     );
-  if (!secretsReady(c.env, configured))
+  if (
+    !secretsReady(
+      c.env,
+      configured || (!setup && c.env.PUBLIC_SIGNUP === "true"),
+    )
+  )
     return c.json(
       {
         error: configured
@@ -675,11 +684,39 @@ authRoutes.get("/status", async (c) => {
   return c.json({
     configured,
     authenticated: !!user,
-    secretsReady: secretsReady(c.env, configured),
+    secretsReady: secretsReady(
+      c.env,
+      configured || c.env.PUBLIC_SIGNUP === "true",
+    ),
+    publicSignup: c.env.PUBLIC_SIGNUP === "true",
     mode: c.env.MODE || "self-hosted",
     ...(user ? { user: { id: user.userId, name: user.name }, workspaces } : {}),
   });
 });
+authRoutes.post("/signup/options", async (c) => {
+  if (c.env.PUBLIC_SIGNUP !== "true")
+    return fail(404, "Account signup is not enabled.");
+  await limit(c, "signup", 5);
+  const b = await body(c);
+  const count = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM users",
+  ).first<{ total: number }>();
+  if ((count?.total ?? 0) >= 100)
+    return fail(429, "This installation has reached its account limit.");
+  return registrationOptions(c, "signup", {
+    ...configuration(c),
+    userId: crypto.randomUUID(),
+    name: cleanName(b.name, "Member"),
+    workspaceId: crypto.randomUUID(),
+    workspaceName: cleanName(b.workspaceName, "My workspace"),
+  });
+});
+authRoutes.post("/signup/verify", (c) => {
+  if (c.env.PUBLIC_SIGNUP !== "true")
+    return fail(404, "Account signup is not enabled.");
+  return verifyRegistration(c, "signup");
+});
+
 authRoutes.post("/setup/options", async (c) => {
   await limit(c, "setup", 10);
   const b = await body(c);
@@ -809,6 +846,35 @@ authRoutes.post("/sessions/revoke", requireAuth, async (c) => {
     .run();
   deleteCookie(c, COOKIE, { path: "/" });
   return c.json({ ok: true });
+});
+authRoutes.delete("/account", requireAuth, requireRecentAuth, async (c) => {
+  const input = await body(c);
+  if (input.confirmation !== "DELETE")
+    return fail(400, "Type DELETE to confirm account deletion.");
+  const user = c.get("principal");
+  const id = user.userId;
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT OR IGNORE INTO workspace_deletions(workspace_id,requested_at)
+      SELECT m.workspace_id,? FROM memberships m WHERE m.user_id=? AND m.role='owner'
+      AND NOT EXISTS(SELECT 1 FROM memberships other WHERE other.workspace_id=m.workspace_id AND other.role='owner' AND other.user_id!=?)`,
+    ).bind(Date.now(), id, id),
+    c.env.DB.prepare(
+      "UPDATE sites SET status='deleting' WHERE workspace_id IN(SELECT workspace_id FROM workspace_deletions) AND workspace_id IN(SELECT workspace_id FROM memberships WHERE user_id=?)",
+    ).bind(id),
+    c.env.DB.prepare(
+      "DELETE FROM auth_invites WHERE created_by=? OR workspace_id IN(SELECT d.workspace_id FROM workspace_deletions d JOIN memberships m ON m.workspace_id=d.workspace_id WHERE m.user_id=?)",
+    ).bind(id, id),
+    c.env.DB.prepare(
+      "DELETE FROM memberships WHERE workspace_id IN(SELECT d.workspace_id FROM workspace_deletions d JOIN memberships m ON m.workspace_id=d.workspace_id WHERE m.user_id=?)",
+    ).bind(id),
+    c.env.DB.prepare(
+      "DELETE FROM auth_challenges WHERE json_extract(data,'$.userId')=?",
+    ).bind(id),
+    c.env.DB.prepare("DELETE FROM users WHERE id=?").bind(id),
+  ]);
+  deleteCookie(c, COOKIE, { path: "/" });
+  return c.json({ ok: true, status: "deletion_scheduled" }, 202);
 });
 authRoutes.post(
   "/passkeys/options",

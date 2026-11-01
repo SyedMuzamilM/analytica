@@ -19,6 +19,9 @@
     },
   ],
   "vars": { "MODE": "self-hosted" },
+  "r2_buckets": [
+    { "binding": "PROJECT_ASSETS", "bucket_name": "analytica-project-assets" },
+  ],
   "ratelimits": [
     {
       "name": "EDGE_RATE_LIMIT",

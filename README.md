@@ -16,13 +16,14 @@ npm run build
 npm run dev:worker
 ```
 
-Open http://localhost:8787/demo to explore labeled synthetic traffic. Open http://localhost:8787 to create the owner using the setup token generated in your ignored `.dev.vars` file. Keep that token private. The setup creates a passkey and shows single-use recovery codes once. Save them before continuing. No global default password exists.
+Open http://localhost:8787 for the product home and http://localhost:8787/demo to explore labeled synthetic traffic. Open http://localhost:8787/login to create the self-hosted owner using the setup token generated in your ignored `.dev.vars` file. Set `PUBLIC_SIGNUP=true` in that file to enable direct passkey signup for separate accounts instead. Keep that token private. The setup creates a passkey and shows single-use recovery codes once. Save them before continuing. No global default password exists.
 
 `npm run setup:local` generates fresh local secrets and never overwrites an existing `.dev.vars`. For the optional Vite development server, configure `APP_ORIGIN=http://localhost:5173` in that file and run `npm run dev -- --host localhost` in a second terminal. Passkeys are bound to the hostname; use localhost consistently. Production requires HTTPS.
 
 ## What works
 
-- Workspace creation, owner/admin/viewer authorization, invitations, passkeys, recovery and session revocation.
+- Public product pages, direct passkey signup when enabled, project navigation and private R2 project logos.
+- Workspace creation, owner/admin/viewer authorization, invitations, passkeys, recovery, session revocation and account deletion.
 - Multiple sites, aggregate or consent-controlled attribution measurement, SPA tracking, goals and outbounds.
 - Period comparisons, source/page/country/device/event filters and exact retained-detail reports with IANA timezone boundaries.
 - Ordered session funnels, admin-only visitor journeys and visitor erasure for attribution-mode sites.
@@ -36,15 +37,19 @@ The aggregate tracker uses document-scoped identifiers in memory. Full navigatio
 Add a site in the dashboard and copy its installation snippet.
 
 ```html
-<script defer src="https://YOUR_INSTALLATION/tracker.js"
-  data-site="YOUR_PUBLIC_SITE_ID" data-mode="aggregate"></script>
+<script
+  defer
+  src="https://YOUR_INSTALLATION/tracker.js"
+  data-site="YOUR_PUBLIC_SITE_ID"
+  data-mode="aggregate"
+></script>
 ```
 
 ```js
-window.analytica('goal', 'signup');
-window.analytica('optOut', true);
+window.analytica("goal", "signup");
+window.analytica("optOut", true);
 // Attribution-mode sites require the configured consent condition first:
-window.analytica('consent', true);
+window.analytica("consent", true);
 ```
 
 Server keys and webhook secrets belong on the backend. Never embed them in this snippet, browser code or coding-assistant prompts. Read [payment integration](docs/operations/payments.md) for trusted checkout correlation and transaction namespaces.

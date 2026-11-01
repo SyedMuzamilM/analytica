@@ -34,6 +34,8 @@ const child = spawn(
     "--persist-to",
     state,
     "--var",
+    "PUBLIC_SIGNUP:true",
+    "--var",
     "APP_ORIGIN:http://localhost:8790",
     "--var",
     "APP_SECRET:local-browser-test-app-secret-not-for-production-123456789",

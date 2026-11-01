@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { createExecutionContext } from "cloudflare:test";
+import runtime from "../apps/worker/index";
 import { app as worker } from "../apps/worker/index";
 import { Hono } from "hono";
 import { isoCBOR } from "@simplewebauthn/server/helpers";
@@ -889,4 +891,258 @@ describe("passkey authentication", () => {
       )?.n,
     ).toBe(12);
   });
+});
+
+describe("public accounts", () => {
+  async function signup(name: string) {
+    const bindings = { ...env, PUBLIC_SIGNUP: "true", SETUP_TOKEN: undefined };
+    const optionsResponse = await request(
+      "/signup/options",
+      { name, workspaceName: `${name} workspace` },
+      undefined,
+      bindings,
+    );
+    expect(optionsResponse.status).toBe(200);
+    const options = await json(optionsResponse);
+    const auth = await authenticator(options.options.challenge);
+    const verified = await request(
+      "/signup/verify",
+      { challengeId: options.challengeId, response: auth.response },
+      undefined,
+      bindings,
+    );
+    expect(verified.status, await verified.clone().text()).toBe(200);
+    const cookie = verified.headers.get("set-cookie")!.split(";")[0];
+    return { cookie, bindings, verified: await json(verified), auth };
+  }
+
+  it("requires explicit signup enablement and creates separate owned workspaces without an installation token", async () => {
+    expect((await request("/signup/options", { name: "Blocked" })).status).toBe(
+      404,
+    );
+    const first = await signup("First");
+    const second = await signup("Second");
+    expect(first.verified.recoveryCodes).toHaveLength(8);
+    const a = await json(
+      await request("/status", undefined, first.cookie, first.bindings),
+    );
+    const b = await json(
+      await request("/status", undefined, second.cookie, second.bindings),
+    );
+    expect(a.authenticated).toBe(true);
+    expect(a.workspaces[0].id).not.toBe(b.workspaces[0].id);
+    const cross = await worker.request(
+      `${origin}/api/workspaces/${a.workspaces[0].id}/sites`,
+      { headers: { Cookie: second.cookie } },
+      second.bindings,
+    );
+    expect(cross.status).toBe(403);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM setup_state").first("n"),
+    ).toBe(0);
+  });
+
+  it("deletes account credentials and owned project access while preserving another account", async () => {
+    const first = await signup("Delete me");
+    const other = await signup("Keep me");
+    const status = await json(
+      await request("/status", undefined, first.cookie, first.bindings),
+    );
+    const workspace = status.workspaces[0].id;
+    const added = await worker.request(
+      `${origin}/api/workspaces/${workspace}/sites`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: first.cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "Test project", domain: "example.com" }),
+      },
+      first.bindings,
+    );
+    expect(added.status).toBe(201);
+    const testSite = await json(added);
+    const image = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7N0AAAAASUVORK5CYII=",
+      ),
+      (c) => c.charCodeAt(0),
+    );
+    const logo = await worker.request(
+      `${origin}/api/workspaces/${workspace}/sites/${testSite.id}/logo`,
+      {
+        method: "PUT",
+        headers: {
+          Cookie: first.cookie,
+          Origin: origin,
+          "Content-Type": "image/png",
+        },
+        body: image,
+      },
+      first.bindings,
+    );
+    expect(logo.status).toBe(200);
+    const denied = await app.request(
+      `${origin}/api/auth/account`,
+      {
+        method: "DELETE",
+        headers: {
+          Cookie: first.cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "wrong" }),
+      },
+      first.bindings,
+    );
+    expect(denied.status).toBe(400);
+    const deleted = await app.request(
+      `${origin}/api/auth/account`,
+      {
+        method: "DELETE",
+        headers: {
+          Cookie: first.cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      },
+      first.bindings,
+    );
+    expect(deleted.status, await deleted.clone().text()).toBe(202);
+    expect(
+      (
+        await json(
+          await request("/status", undefined, first.cookie, first.bindings),
+        )
+      ).authenticated,
+    ).toBe(false);
+    expect(
+      (
+        await json(
+          await request("/status", undefined, other.cookie, other.bindings),
+        )
+      ).authenticated,
+    ).toBe(true);
+    expect(
+      await env.DB.prepare("SELECT 1 FROM users WHERE id=?")
+        .bind(status.user.id)
+        .first(),
+    ).toBeNull();
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM passkeys WHERE user_id=?")
+        .bind(status.user.id)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT status FROM sites WHERE workspace_id=?")
+        .bind(workspace)
+        .first("status"),
+    ).toBe("deleting");
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM memberships WHERE workspace_id=?",
+      )
+        .bind(workspace)
+        .first("n"),
+    ).toBe(0);
+    for (let pass = 0; pass < 3; pass++) {
+      await runtime.scheduled(
+        { scheduledTime: Date.now(), cron: "*/15 * * * *", noRetry() {} },
+        first.bindings,
+        createExecutionContext(),
+      );
+    }
+    expect(
+      await env.DB.prepare("SELECT 1 FROM workspaces WHERE id=?")
+        .bind(workspace)
+        .first(),
+    ).toBeNull();
+    expect(
+      await env.PROJECT_ASSETS?.get(
+        `projects/${workspace}/${testSite.id}/logo`,
+      ),
+    ).toBeNull();
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM sites WHERE workspace_id=?",
+      )
+        .bind(workspace)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT 1 FROM workspaces WHERE id=?")
+        .bind(
+          (
+            await json(
+              await request("/status", undefined, other.cookie, other.bindings),
+            )
+          ).workspaces[0].id,
+        )
+        .first(),
+    ).not.toBeNull();
+  });
+});
+
+it("stores project logos in private R2 and rejects unauthorized or executable uploads", async () => {
+  const { cookie } = await setup();
+  const status = await json(await request("/status", undefined, cookie));
+  const workspace = status.workspaces[0].id;
+  const created = await worker.request(
+    `${origin}/api/workspaces/${workspace}/sites`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Image test", domain: "example.com" }),
+    },
+    env,
+  );
+  const site = await json(created);
+  const path = `${origin}/api/workspaces/${workspace}/sites/${site.id}/logo`;
+  const png = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7N0AAAAASUVORK5CYII=",
+    ),
+    (c) => c.charCodeAt(0),
+  );
+  const uploaded = await worker.request(
+    path,
+    {
+      method: "PUT",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "image/png" },
+      body: png,
+    },
+    env,
+  );
+  expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+  expect((await json(uploaded)).logoVersion).toBe(1);
+  const anonymous = await worker.request(path, {}, env);
+  expect(anonymous.status).toBe(401);
+  const downloaded = await worker.request(
+    path,
+    { headers: { Cookie: cookie } },
+    env,
+  );
+  expect(downloaded.headers.get("Content-Type")).toBe("image/png");
+  expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(png);
+  const hostile = await worker.request(
+    path,
+    {
+      method: "PUT",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Content-Type": "image/svg+xml",
+      },
+      body: '<svg onload="alert(1)"></svg>',
+    },
+    env,
+  );
+  expect(hostile.status).toBe(400);
 });

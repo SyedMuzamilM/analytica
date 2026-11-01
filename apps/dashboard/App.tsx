@@ -57,8 +57,12 @@ import { RevenueView } from "./RevenueView";
 import { AccountView } from "./AccountView";
 import { FunnelsView } from "./FunnelsView";
 import { JourneysView } from "./JourneysView";
+import { ProjectsView } from "./ProjectsView";
+import { ProjectImage } from "./ProjectImage";
+import { LayoutGrid } from "lucide-react";
 
 type View =
+  | "projects"
   | "overview"
   | "acquisition"
   | "pages"
@@ -86,6 +90,7 @@ const nav: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "revenue", label: "Revenue", icon: Wallet },
 ];
 const viewDescriptions: Record<View, string> = {
+  projects: "A home for every website, application and experiment.",
   overview: "The people, pages, and paths behind your traffic.",
   acquisition: "Understand what brings people to your website.",
   pages: "See where attention lands, and where it leads.",
@@ -666,19 +671,19 @@ function SiteModal({
     }
   }
   return (
-    <Modal title="Add a website" onClose={onClose}>
+    <Modal title="Add a project" onClose={onClose}>
       <p className="modal-copy">
-        Give your website a home in this workspace. You can install the tracking
-        snippet next.
+        Create a separate project for your website or application. Connect its
+        tracker or native collector next.
       </p>
       <form onSubmit={submit}>
         <label>
-          Website name
+          Project name
           <input
             name="name"
             required
             maxLength={80}
-            placeholder="Your website"
+            placeholder="Orchard Ledger Desktop"
             autoFocus
           />
         </label>
@@ -715,7 +720,7 @@ function SiteModal({
           </select>
         </label>
         <fieldset>
-          <legend>How should this site measure traffic?</legend>
+          <legend>How should this project measure traffic?</legend>
           <label className="radio-card">
             <input
               type="radio"
@@ -752,7 +757,7 @@ function SiteModal({
             Cancel
           </button>
           <button disabled={busy} className="button primary">
-            {busy ? "Adding website…" : "Add website"}
+            {busy ? "Adding project…" : "Add project"}
           </button>
         </div>
       </form>
@@ -841,6 +846,13 @@ function SettingsView({
   }
   return (
     <div className="settings-grid">
+      <ProjectImage
+        site={site}
+        canEdit={canEdit}
+        demo={demo}
+        onChanged={onSiteChange}
+        notify={notify}
+      />
       <section className="panel settings-panel">
         <div className="panel-heading">
           <h2>Website details</h2>
@@ -947,6 +959,36 @@ function SettingsView({
         </section>
         <section className="panel settings-panel">
           <div className="panel-heading">
+            <h2>Application connection</h2>
+          </div>
+          <p>
+            For desktop and mobile collectors, use these public project values.
+            Enable application analytics only after opt-in.
+          </p>
+          <dl className="connection-facts">
+            {[
+              ["Collector endpoint", `${window.location.origin}/v1/collect`],
+              ["Public project ID", site.id],
+              ["Collection hostname", site.domain],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  <code>{value}</code>
+                  <CopyButton
+                    value={value}
+                    label={`Copy ${label.toLowerCase()}`}
+                  />
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <a href="/docs#applications" className="subtle-link">
+            Read the application guide <ArrowRight size={14} />
+          </a>
+        </section>
+        <section className="panel settings-panel">
+          <div className="panel-heading">
             <h2>Access and data</h2>
           </div>
           <div className="settings-action">
@@ -1050,11 +1092,13 @@ export function App() {
   const requestedView = params.get("view") as View | null;
   const view =
     requestedView &&
-    [...nav.map((item) => item.id), "settings", "account"].includes(
+    [...nav.map((item) => item.id), "settings", "account", "projects"].includes(
       requestedView,
     )
       ? requestedView
-      : "overview";
+      : !isDemo && !params.get("site")
+        ? "projects"
+        : "overview";
   const period = ["7d", "30d", "90d"].includes(params.get("period") ?? "")
     ? params.get("period")!
     : "7d";
@@ -1106,7 +1150,7 @@ export function App() {
     if (!isDemo) void loadAuth();
   }, [isDemo, loadAuth]);
   useEffect(() => {
-    document.title = `${view === "overview" ? "Overview" : (nav.find((item) => item.id === view)?.label ?? (view === "account" ? "Workspace & account" : "Settings"))}${site ? ` · ${site.name}` : ""} · Analytica`;
+    document.title = `${view === "projects" ? "Projects" : view === "overview" ? "Overview" : (nav.find((item) => item.id === view)?.label ?? (view === "account" ? "Workspace & account" : "Settings"))}${site ? ` · ${site.name}` : ""} · Analytica`;
   }, [view, site?.name]);
   useEffect(() => {
     if (isDemo || !status?.authenticated || !workspace) return;
@@ -1138,7 +1182,8 @@ export function App() {
       !site ||
       !workspace ||
       view === "settings" ||
-      view === "account"
+      view === "account" ||
+      view === "projects"
     )
       return;
     const controller = new AbortController();
@@ -1171,7 +1216,7 @@ export function App() {
     queryKey,
     period,
     refresh,
-    view === "settings" || view === "account",
+    view === "settings" || view === "account" || view === "projects",
   ]);
   const data = isDemo ? demoData : report;
   const activeFilters = filters.filter((filter) => params.get(filter.key));
@@ -1179,7 +1224,7 @@ export function App() {
     update({ [key]: value });
   }
   function changeView(next: View) {
-    update({ view: next === "overview" ? null : next });
+    update({ view: next });
     setSidebarOpen(false);
   }
   function onSiteChange(next: Site) {
@@ -1223,6 +1268,8 @@ export function App() {
           status={status!}
           onSuccess={(codes) => {
             if (codes) setRecoveryCodes(codes);
+            window.history.replaceState({}, "", "/app");
+            window.dispatchEvent(new PopStateEvent("popstate"));
             void loadAuth();
           }}
         />
@@ -1237,6 +1284,19 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <header className="console-globalbar">
+        <a href="/" aria-label="Analytica home">
+          <Brand small />
+        </a>
+        <span className="console-product-name">Product analytics</span>
+        <nav aria-label="Global navigation">
+          <a href="/docs">Documentation</a>
+          <a href="/demo">Demo</a>
+          <button onClick={() => changeView("account")}>
+            {isDemo ? "Demo account" : status?.user?.name || "Account"}
+          </button>
+        </nav>
+      </header>
       {sidebarOpen && (
         <button
           className="sidebar-backdrop"
@@ -1247,7 +1307,7 @@ export function App() {
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <a
           className="brand-link"
-          href={isDemo ? "/demo" : "/"}
+          href={isDemo ? "/demo" : "/app"}
           aria-label="Analytica overview"
         >
           <Brand small />
@@ -1289,7 +1349,15 @@ export function App() {
         >
           Workspace & account <Settings size={12} />
         </button>
-        <div className="nav-section-label">Workspace analytics</div>
+        <button
+          className={`nav-item ${view === "projects" ? "active" : ""}`}
+          onClick={() => changeView("projects")}
+          aria-current={view === "projects" ? "page" : undefined}
+        >
+          <LayoutGrid size={18} />
+          <span>Projects</span>
+        </button>
+        <div className="nav-section-label">Project analytics</div>
         <nav aria-label="Main navigation">
           {nav.map((item) => (
             <button
@@ -1413,7 +1481,7 @@ export function App() {
           <div className="topbar-right">
             <span className="connection-label">
               <span className="live-dot" />
-              {isDemo ? "Demo environment" : "Your installation"}
+              {isDemo ? "Demo environment" : "Live workspace"}
             </span>
             {workspace?.role !== "viewer" && (
               <button
@@ -1421,7 +1489,7 @@ export function App() {
                 onClick={() => setAddSite(true)}
               >
                 <Plus size={15} />
-                <span>Add website</span>
+                <span>Add project</span>
               </button>
             )}
           </div>
@@ -1432,8 +1500,8 @@ export function App() {
               <span className="demo-badge">Demo data</span>You're exploring
               sample traffic. Try a date range or click a source.
             </span>
-            <a href="/">
-              Set up your workspace <ArrowRight size={14} />
+            <a href="/signup">
+              Create your account <ArrowRight size={14} />
             </a>
           </div>
         )}
@@ -1441,102 +1509,111 @@ export function App() {
           <div className="page-heading">
             <div>
               <div className="page-context">
-                {site?.name ?? "Your workspace"}
+                {view === "projects"
+                  ? (workspace?.name ?? "Your workspace")
+                  : (site?.name ?? "Your workspace")}
                 <span className="context-dot" />
                 {view === "settings" || view === "account"
                   ? "Configuration"
                   : "Website analytics"}
               </div>
               <h1>
-                {view === "overview"
-                  ? "Website overview"
-                  : view === "settings"
-                    ? "Website settings"
-                    : view === "account"
-                      ? "Workspace & account"
-                      : nav.find((item) => item.id === view)?.label}
+                {view === "projects"
+                  ? "Projects"
+                  : view === "overview"
+                    ? "Website overview"
+                    : view === "settings"
+                      ? "Website settings"
+                      : view === "account"
+                        ? "Workspace & account"
+                        : nav.find((item) => item.id === view)?.label}
               </h1>
               <p>{viewDescriptions[view]}</p>
             </div>
             <div className="page-actions">
-              {view !== "settings" && view !== "account" && (
-                <>
-                  <button
-                    className={`icon-button refresh-button ${reportLoading ? "spinning" : ""}`}
-                    aria-label="Refresh report"
-                    disabled={reportLoading}
-                    onClick={() => {
-                      setRefresh((value) => value + 1);
-                      if (isDemo) notify("Sample report refreshed.");
-                    }}
-                  >
-                    <RefreshCw size={16} />
-                  </button>
-                  <label className="period-select">
-                    <CalendarDays size={15} />
-                    <select
-                      aria-label="Date range"
-                      value={period}
-                      onChange={(event) =>
-                        update({ period: event.target.value })
-                      }
+              {view !== "settings" &&
+                view !== "account" &&
+                view !== "projects" && (
+                  <>
+                    <button
+                      className={`icon-button refresh-button ${reportLoading ? "spinning" : ""}`}
+                      aria-label="Refresh report"
+                      disabled={reportLoading}
+                      onClick={() => {
+                        setRefresh((value) => value + 1);
+                        if (isDemo) notify("Sample report refreshed.");
+                      }}
                     >
-                      <option value="7d">Last 7 days</option>
-                      <option value="30d">Last 30 days</option>
-                      <option value="90d">Last 90 days</option>
-                    </select>
-                    <ChevronDown size={13} />
-                  </label>
-                </>
-              )}
+                      <RefreshCw size={16} />
+                    </button>
+                    <label className="period-select">
+                      <CalendarDays size={15} />
+                      <select
+                        aria-label="Date range"
+                        value={period}
+                        onChange={(event) =>
+                          update({ period: event.target.value })
+                        }
+                      >
+                        <option value="7d">Last 7 days</option>
+                        <option value="30d">Last 30 days</option>
+                        <option value="90d">Last 90 days</option>
+                      </select>
+                      <ChevronDown size={13} />
+                    </label>
+                  </>
+                )}
             </div>
           </div>
-          {view !== "settings" && view !== "account" && site && (
-            <div className="report-toolbar">
-              <div className="filter-chips">
-                {activeFilters.length ? (
-                  <>
-                    {activeFilters.map((filter) => (
+          {view !== "settings" &&
+            view !== "account" &&
+            view !== "projects" &&
+            site && (
+              <div className="report-toolbar">
+                <div className="filter-chips">
+                  {activeFilters.length ? (
+                    <>
+                      {activeFilters.map((filter) => (
+                        <button
+                          className="filter-chip"
+                          key={filter.key}
+                          onClick={() => update({ [filter.key]: null })}
+                        >
+                          <span>{filter.label}:</span> {params.get(filter.key)}
+                          <X size={12} />
+                        </button>
+                      ))}
                       <button
-                        className="filter-chip"
-                        key={filter.key}
-                        onClick={() => update({ [filter.key]: null })}
+                        className="text-button clear-filters"
+                        onClick={() =>
+                          update(
+                            Object.fromEntries(
+                              filters.map((filter) => [filter.key, null]),
+                            ),
+                          )
+                        }
                       >
-                        <span>{filter.label}:</span> {params.get(filter.key)}
-                        <X size={12} />
+                        Clear all
                       </button>
-                    ))}
-                    <button
-                      className="text-button clear-filters"
-                      onClick={() =>
-                        update(
-                          Object.fromEntries(
-                            filters.map((filter) => [filter.key, null]),
-                          ),
-                        )
-                      }
-                    >
-                      Clear all
-                    </button>
-                  </>
-                ) : (
-                  <span className="all-traffic">
-                    <Globe size={14} />
-                    All traffic
-                  </span>
-                )}
+                    </>
+                  ) : (
+                    <span className="all-traffic">
+                      <Globe size={14} />
+                      All traffic
+                    </span>
+                  )}
+                </div>
+                <span className="report-freshness">
+                  {isDemo
+                    ? "Sample data"
+                    : data?.lastEventAt
+                      ? `Last event ${new Date(data.lastEventAt).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}`
+                      : "Waiting for traffic"}
+                  <span className="context-dot" />
+                  {site.timezone}
+                </span>
               </div>
-              <span className="report-freshness">
-                {isDemo
-                  ? "Sample data"
-                  : data?.lastEventAt
-                    ? `Last event ${new Date(data.lastEventAt).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}`
-                    : "Waiting for traffic"}
-                <span className="context-dot" />
-                {site.timezone}
-              </span>
-            </div>
-          )}
+            )}
           {sitesError && (
             <div role="alert" className="error-panel">
               <strong>We couldn't load your websites.</strong>
@@ -1549,58 +1626,89 @@ export function App() {
               </button>
             </div>
           )}
-          {!site && !sitesLoading && !sitesError && view !== "account" && (
-            <section className="panel welcome-empty">
-              <span className="empty-icon">
-                <Globe size={28} />
-              </span>
-              <h2>Your first website starts here</h2>
-              <p>
-                Add a website, install a small snippet, and see which visits
-                turn into action.
-              </p>
-              {workspace?.role !== "viewer" ? (
-                <button
-                  className="button primary"
-                  onClick={() => setAddSite(true)}
-                >
-                  <Plus size={16} />
-                  Add your first website
-                </button>
-              ) : (
-                <p>Ask your workspace owner to add a website.</p>
-              )}
-              <a href="/demo" className="subtle-link">
-                Explore a sample report <ArrowRight size={15} />
-              </a>
-            </section>
-          )}
-          {(sitesLoading || reportLoading) && !data && view !== "account" && (
-            <div
-              className="report-skeleton"
-              aria-label="Loading report"
-              role="status"
-            >
-              <div className="skeleton-stats">
-                {[0, 1, 2, 3].map((index) => (
-                  <div key={index} />
-                ))}
-              </div>
-              <div className="skeleton-chart" />
-              <span className="sr-only">Loading your report…</span>
-            </div>
-          )}
-          {site && reportError && view !== "settings" && view !== "account" && (
-            <div role="alert" className="error-panel">
-              <strong>This report couldn't be loaded.</strong>
-              <p>{reportError}</p>
-              <button
-                className="button secondary small"
-                onClick={() => setRefresh((value) => value + 1)}
+          {!site &&
+            !sitesLoading &&
+            !sitesError &&
+            view !== "account" &&
+            view !== "projects" && (
+              <section className="panel welcome-empty">
+                <span className="empty-icon">
+                  <Globe size={28} />
+                </span>
+                <h2>Your first website starts here</h2>
+                <p>
+                  Add a website, install a small snippet, and see which visits
+                  turn into action.
+                </p>
+                {workspace?.role !== "viewer" ? (
+                  <button
+                    className="button primary"
+                    onClick={() => setAddSite(true)}
+                  >
+                    <Plus size={16} />
+                    Add your first website
+                  </button>
+                ) : (
+                  <p>Ask your workspace owner to add a website.</p>
+                )}
+                <a href="/demo" className="subtle-link">
+                  Explore a sample report <ArrowRight size={15} />
+                </a>
+              </section>
+            )}
+          {(sitesLoading || reportLoading) &&
+            !data &&
+            view !== "account" &&
+            view !== "projects" && (
+              <div
+                className="report-skeleton"
+                aria-label="Loading report"
+                role="status"
               >
-                Try again
-              </button>
-            </div>
+                <div className="skeleton-stats">
+                  {[0, 1, 2, 3].map((index) => (
+                    <div key={index} />
+                  ))}
+                </div>
+                <div className="skeleton-chart" />
+                <span className="sr-only">Loading your report…</span>
+              </div>
+            )}
+          {site &&
+            reportError &&
+            view !== "settings" &&
+            view !== "account" &&
+            view !== "projects" && (
+              <div role="alert" className="error-panel">
+                <strong>This report couldn't be loaded.</strong>
+                <p>{reportError}</p>
+                <button
+                  className="button secondary small"
+                  onClick={() => setRefresh((value) => value + 1)}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+          {view === "projects" && (
+            <ProjectsView
+              sites={availableSites}
+              workspace={workspace}
+              loading={sitesLoading}
+              demo={isDemo}
+              onAdd={() => setAddSite(true)}
+              onOpen={(next) =>
+                update({
+                  site: next.id,
+                  view: "overview",
+                  source: null,
+                  path: null,
+                  country: null,
+                  device: null,
+                  event: null,
+                })
+              }
+            />
           )}
           {view === "account" && (
             <AccountView
@@ -1644,6 +1752,7 @@ export function App() {
           {site &&
             view !== "settings" &&
             view !== "account" &&
+            view !== "projects" &&
             data &&
             !reportError && (
               <>
@@ -1931,7 +2040,7 @@ export function App() {
             setSites((current) => [...current, next]);
             update({ site: next.id, view: "settings" });
             setAddSite(false);
-            notify("Website added. Copy its tracking snippet to get started.");
+            notify("Project added. Copy its tracking snippet to get started.");
           }}
         />
       )}

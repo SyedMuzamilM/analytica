@@ -9,6 +9,8 @@ import { revenueRoutes, moneyRoutes, cleanupRevenue } from "./revenue";
 import { privacyRoutes, cleanupPrivacy } from "./privacy";
 import { funnelRoutes, cleanupFunnels } from "./funnels";
 import type { AppEnv, Bindings } from "./env";
+import { cleanupProjectAssets } from "./project-assets";
+import { cleanupDeletedWorkspaces } from "./account-deletion";
 
 const app = new Hono<AppEnv>();
 
@@ -59,7 +61,7 @@ app.use("*", async (c, next) => {
   if (
     c.env.EDGE_RATE_LIMIT &&
     (c.req.path.startsWith("/v1/") ||
-      /^\/api\/auth\/(?:setup|login|recovery|invite)\/(?:options|verify)$/.test(
+      /^\/api\/auth\/(?:setup|signup|login|recovery|invite)\/(?:options|verify)$/.test(
         c.req.path,
       ))
   ) {
@@ -158,7 +160,10 @@ app.all("/api", (c) => c.json({ error: "not_found" }, 404));
 app.all("/api/*", (c) => c.json({ error: "not_found" }, 404));
 app.all("/v1", (c) => c.json({ error: "not_found" }, 404));
 app.all("/v1/*", (c) => c.json({ error: "not_found" }, 404));
-app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+app.all("*", async (c) => {
+  const response = await c.env.ASSETS.fetch(c.req.raw);
+  return c.newResponse(response.body, response);
+});
 
 app.onError((error, c) => {
   if (error instanceof HTTPException)
@@ -190,10 +195,12 @@ export default {
     env: Bindings,
     _ctx: ExecutionContext,
   ) {
+    await cleanupProjectAssets(env);
     await runMaintenance(env);
     if (env.RESTORE_LOCK !== "true") await cleanupAuth(env.DB, Date.now());
     await cleanupRevenue(env);
     await cleanupFunnels(env);
     await cleanupPrivacy(env);
+    await cleanupDeletedWorkspaces(env);
   },
 } satisfies ExportedHandler<Bindings>;

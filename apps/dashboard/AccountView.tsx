@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Workspace } from "../../packages/contracts";
 import { api, friendlyError, post } from "./api";
+import { DeleteAccount } from "./DeleteAccount";
 
 interface Member {
   userId: string;
@@ -499,6 +500,7 @@ export function AccountView({
           </>
         )}
       </section>
+      <DeleteAccount demo={demo} />
       {showCreate && (
         <NewWorkspace
           onClose={() => setShowCreate(false)}

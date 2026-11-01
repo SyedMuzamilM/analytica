@@ -7,6 +7,8 @@ export interface Bindings {
   SETUP_TOKEN?: string;
   APP_ORIGIN?: string;
   MODE?: string;
+  PUBLIC_SIGNUP?: string;
+  PROJECT_ASSETS?: R2Bucket;
   RESTORE_LOCK?: string;
   EDGE_RATE_LIMIT?: {
     limit(input: { key: string }): Promise<{ success: boolean }>;

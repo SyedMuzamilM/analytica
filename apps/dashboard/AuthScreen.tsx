@@ -3,7 +3,15 @@ import {
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
-import { ArrowRight, Fingerprint, KeyRound, ShieldCheck } from "lucide-react";
+import { Button, LinkButton } from "@cloudflare/kumo/components/button";
+import { Input } from "@cloudflare/kumo/components/input";
+import {
+  ArrowRight,
+  Check,
+  Fingerprint,
+  KeyRound,
+  ShieldCheck,
+} from "lucide-react";
 import type { AuthStatus } from "../../packages/contracts";
 import { friendlyError, post } from "./api";
 
@@ -13,7 +21,7 @@ type RegistrationOptions = Parameters<
 type AuthenticationOptions = Parameters<
   typeof startAuthentication
 >[0]["optionsJSON"];
-type Flow = "login" | "setup" | "recovery" | "invite";
+type Flow = "login" | "signup" | "setup" | "recovery" | "invite";
 
 export function Brand({ small = false }: { small?: boolean }) {
   return (
@@ -37,14 +45,23 @@ export function AuthScreen({
   status: AuthStatus;
   onSuccess: (codes?: string[]) => void;
 }) {
-  const [flow, setFlow] = useState<Flow>(status.configured ? "login" : "setup");
+  const [flow, setFlow] = useState<Flow>(() =>
+    status.publicSignup
+      ? window.location.pathname === "/signup"
+        ? "signup"
+        : "login"
+      : status.configured
+        ? "login"
+        : "setup",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [token, setToken] = useState("");
   const [code, setCode] = useState("");
-
+  const unavailable = status.secretsReady === false;
+  const creating = flow === "signup" || flow === "setup";
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -64,25 +81,25 @@ export function AuthScreen({
         });
         onSuccess();
       } else {
-        const endpoint =
-          flow === "setup"
-            ? "setup"
-            : flow === "invite"
-              ? "invite"
-              : "recovery";
         const payload =
-          flow === "setup"
-            ? { token, name: name.trim(), workspaceName: workspaceName.trim() }
-            : flow === "invite"
-              ? { token, name: name.trim() }
-              : { code: code.trim() };
+          flow === "signup"
+            ? { name: name.trim(), workspaceName: workspaceName.trim() }
+            : flow === "setup"
+              ? {
+                  token,
+                  name: name.trim(),
+                  workspaceName: workspaceName.trim(),
+                }
+              : flow === "invite"
+                ? { token, name: name.trim() }
+                : { code: code.trim() };
         const data = await post<{
           challengeId: string;
           options: RegistrationOptions;
-        }>(`/api/auth/${endpoint}/options`, payload);
+        }>(`/api/auth/${flow}/options`, payload);
         const response = await startRegistration({ optionsJSON: data.options });
         const result = await post<{ recoveryCodes?: string[] }>(
-          `/api/auth/${endpoint}/verify`,
+          `/api/auth/${flow}/verify`,
           { challengeId: data.challengeId, response },
         );
         setToken("");
@@ -92,175 +109,170 @@ export function AuthScreen({
     } catch (err) {
       setError(
         err instanceof Error && err.name === "NotAllowedError"
-          ? "The passkey request was canceled. Try again when you are ready."
+          ? "The passkey request was canceled. Try again, or use another device or password manager."
           : friendlyError(err),
       );
     } finally {
       setBusy(false);
     }
   }
-
-  const unavailable = status.secretsReady === false;
+  function choose(next: Flow) {
+    setFlow(next);
+    setError("");
+  }
   return (
-    <div className="auth-page">
-      <header className="auth-header">
-        <Brand />
-        <a href="/demo" className="subtle-link">
-          Explore the demo <ArrowRight size={15} />
+    <div className="account-entry">
+      <header className="public-header">
+        <a href="/" aria-label="Analytica home">
+          <Brand />
         </a>
+        <div>
+          <a href="/docs">Need a hand?</a>
+          <LinkButton href="/demo" variant="secondary">
+            Explore the demo <ArrowRight size={14} />
+          </LinkButton>
+        </div>
       </header>
-      <main className="auth-layout">
-        <section className="auth-story">
-          <span className="auth-story-line" />
+      <main className="account-entry-layout">
+        <section className="account-entry-story">
+          <span className="product-eyebrow">Your products, understood.</span>
           <h1>
-            A clearer view of
-            <br />
-            what brings people in.
+            A clear view.
+            <br />A better next move.
           </h1>
           <p>
-            Your traffic, the paths people take, and the actions that matter.
-            All in one place.
+            Bring your websites, apps and product events into a workspace that
+            stays yours.
           </p>
-          <div className="auth-trust">
-            <ShieldCheck size={19} />
-            <span>Your installation. Your data.</span>
-          </div>
-          <div className="story-chart" aria-hidden="true">
-            <svg viewBox="0 0 440 170">
-              <defs>
-                <linearGradient id="storyFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#315bd8" stopOpacity=".15" />
-                  <stop offset="1" stopColor="#315bd8" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 145L25 136L50 140L75 118L100 124L125 104L150 109L175 90L200 96L225 74L250 78L275 58L300 64L325 37L350 45L375 20L400 26L440 5V170H0Z"
-                fill="url(#storyFill)"
-              />
-              <path
-                d="M0 145L25 136L50 140L75 118L100 124L125 104L150 109L175 90L200 96L225 74L250 78L275 58L300 64L325 37L350 45L375 20L400 26L440 5"
-                fill="none"
-                stroke="#315bd8"
-                strokeWidth="2.5"
-              />
-            </svg>
+          <ul>
+            <li>
+              <Check size={17} />
+              Separate projects for every product
+            </li>
+            <li>
+              <Check size={17} />
+              Traffic, conversions and revenue
+            </li>
+            <li>
+              <Check size={17} />
+              Export and delete your own data
+            </li>
+          </ul>
+          <div className="account-story-note">
+            <ShieldCheck size={21} />
+            <span>
+              Secure by default.
+              <br />
+              <small>Your passkey stays with your device.</small>
+            </span>
           </div>
         </section>
-        <section className="auth-card" aria-labelledby="auth-title">
-          <span className="auth-icon">
-            <Fingerprint size={27} />
-          </span>
+        <section className="account-entry-form" aria-labelledby="auth-title">
+          {new URLSearchParams(window.location.search).get("deleted") ===
+            "1" && (
+            <div className="deletion-success" role="status">
+              Your account has been deleted. Owned project data is queued for
+              cleanup.
+            </div>
+          )}
+          <div className="account-form-icon">
+            <Fingerprint size={26} />
+          </div>
           <h2 id="auth-title">
             {unavailable
-              ? "Finish configuring this installation"
-              : flow === "setup"
-                ? "Make this workspace yours"
-                : flow === "recovery"
-                  ? "Recover your access"
-                  : flow === "invite"
-                    ? "Join your workspace"
-                    : "Welcome back"}
+              ? "Account access is temporarily unavailable"
+              : flow === "signup"
+                ? "Create your account"
+                : flow === "setup"
+                  ? "Set up your installation"
+                  : flow === "recovery"
+                    ? "Recover your account"
+                    : flow === "invite"
+                      ? "Join your team"
+                      : "Log in to Analytica"}
           </h2>
           <p>
             {unavailable
-              ? "The installation needs its application secret and owner setup token before accounts can be created."
-              : flow === "setup"
-                ? "Create your owner account with a passkey. You will need the private setup token from your installation."
+              ? "The service needs its account configuration completed. Please try again later."
+              : creating
+                ? "Create a passkey with your fingerprint, face, device lock or password manager. Save the recovery codes shown next."
                 : flow === "recovery"
-                  ? "Use one of your saved recovery codes to register a replacement passkey."
+                  ? "Use one saved recovery code to create a replacement passkey. Your older passkeys will be revoked."
                   : flow === "invite"
-                    ? "Enter the invitation token shared by your workspace owner."
-                    : "Use your fingerprint, face, or device lock to sign in securely."}
+                    ? "Enter the invitation shared by your workspace owner."
+                    : "Use the passkey you created on this device, another device or your password manager."}
           </p>
           {unavailable ? (
-            <div className="setup-guidance">
-              <code>APP_SECRET</code>
-              <code>SETUP_TOKEN</code>
-              <p>
-                Set two different random values of at least 32 characters in
-                your Cloudflare Worker secrets. Replace all example values, then
-                reload this page.
-              </p>
-              <button
-                className="button primary"
-                onClick={() => window.location.reload()}
-              >
-                Check configuration
-              </button>
-            </div>
+            <Button onClick={() => window.location.reload()}>Try again</Button>
           ) : (
             <form onSubmit={submit}>
-              {(flow === "setup" || flow === "invite") && (
+              {(creating || flow === "invite") && (
                 <>
-                  <label>
-                    Your name
-                    <input
-                      name="name"
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                  <Input
+                    label="Your name"
+                    name="name"
+                    autoComplete="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    maxLength={80}
+                    placeholder="Your name"
+                    size="lg"
+                  />
+                  {creating && (
+                    <Input
+                      label="Workspace name"
+                      name="workspace"
+                      autoComplete="organization"
+                      value={workspaceName}
+                      onChange={(e) => setWorkspaceName(e.target.value)}
+                      required
                       maxLength={80}
-                      required
-                      placeholder="Alex Morgan"
+                      placeholder="Your team or company"
+                      size="lg"
                     />
-                  </label>
-                  {flow === "setup" && (
-                    <label>
-                      Workspace name
-                      <input
-                        name="workspace"
-                        autoComplete="organization"
-                        value={workspaceName}
-                        onChange={(e) => setWorkspaceName(e.target.value)}
-                        maxLength={80}
-                        required
-                        placeholder="Your team or company"
-                      />
-                    </label>
                   )}
-                  <label>
-                    {flow === "setup"
-                      ? "Private setup token"
-                      : "Invitation token"}
-                    <input
-                      name="token"
-                      type="password"
-                      autoComplete="off"
-                      value={token}
-                      onChange={(e) => setToken(e.target.value)}
-                      required
-                      placeholder={
-                        flow === "setup"
-                          ? "From your installation secrets"
-                          : "From your workspace owner"
-                      }
-                    />
-                  </label>
                 </>
               )}
+              {(flow === "setup" || flow === "invite") && (
+                <Input
+                  label={
+                    flow === "setup"
+                      ? "Private setup token"
+                      : "Invitation token"
+                  }
+                  name="token"
+                  type="password"
+                  autoComplete="off"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  required
+                  size="lg"
+                />
+              )}
               {flow === "recovery" && (
-                <label>
-                  Recovery code
-                  <input
-                    name="recovery-code"
-                    type="password"
-                    autoComplete="off"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    required
-                    placeholder="Enter one unused recovery code"
-                  />
-                </label>
+                <Input
+                  label="Recovery code"
+                  name="recovery-code"
+                  type="password"
+                  autoComplete="off"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                  size="lg"
+                />
               )}
               {error && (
                 <div className="inline-error" role="alert">
                   {error}
                 </div>
               )}
-              <button
-                disabled={busy}
-                className="button primary auth-submit"
+              <Button
                 type="submit"
+                variant="primary"
+                size="lg"
+                loading={busy}
+                className="account-submit"
               >
                 <Fingerprint size={18} />
                 {busy
@@ -270,55 +282,53 @@ export function AuthScreen({
                     : flow === "recovery"
                       ? "Create replacement passkey"
                       : "Create your passkey"}
-              </button>
-              <span className="auth-note">
-                Your passkey stays protected by your device.
+              </Button>
+              <span className="account-passkey-note">
+                No passwords to remember. Keep your recovery codes private.
               </span>
             </form>
           )}
           {!unavailable && (
-            <div className="auth-alternatives">
-              {flow !== "login" && status.configured && (
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    setFlow("login");
-                    setError("");
-                  }}
-                >
-                  Back to sign in
-                </button>
-              )}
-              {flow === "login" && (
+            <div className="account-alternatives">
+              {flow === "login" ? (
                 <>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      setFlow("recovery");
-                      setError("");
-                    }}
-                  >
+                  <Button variant="ghost" onClick={() => choose("recovery")}>
                     <KeyRound size={14} />
                     Use a recovery code
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      setFlow("invite");
-                      setError("");
-                    }}
-                  >
+                  </Button>
+                  <Button variant="ghost" onClick={() => choose("invite")}>
                     Have an invitation?
-                  </button>
+                  </Button>
                 </>
+              ) : (
+                <Button variant="ghost" onClick={() => choose("login")}>
+                  Back to sign in
+                </Button>
+              )}
+              {status.publicSignup && (
+                <p>
+                  {flow === "signup" ? (
+                    <>
+                      Already have an account? <a href="/login">Log in</a>
+                    </>
+                  ) : (
+                    <>
+                      New to Analytica?{" "}
+                      <a href="/signup">
+                        Create an account <ArrowRight size={13} />
+                      </a>
+                    </>
+                  )}
+                </p>
               )}
             </div>
           )}
+          <p className="account-privacy-link">
+            By continuing, you acknowledge our{" "}
+            <a href="/privacy">privacy and data information</a>.
+          </p>
         </section>
       </main>
-      <footer className="auth-footer">
-        A little less guesswork. A lot more perspective.
-      </footer>
     </div>
   );
 }

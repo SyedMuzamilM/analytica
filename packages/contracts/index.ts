@@ -16,6 +16,7 @@ export interface AuthStatus {
   workspaces?: Workspace[];
   mode?: string;
   secretsReady?: boolean;
+  publicSignup?: boolean;
 }
 export interface Site {
   id: string;
@@ -27,6 +28,7 @@ export interface Site {
   status: "active" | "paused" | "deleting";
   createdAt: number;
   dailyLimit: number;
+  logoVersion?: number;
 }
 export interface MetricSet {
   pageviews: number;

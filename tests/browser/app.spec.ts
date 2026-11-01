@@ -39,11 +39,10 @@ test("demo filters, navigation and mobile layout work without authentication", a
   expect(errors).toEqual([]);
 });
 
-test("virtual passkey owner setup, create site, collect and view live metrics", async ({
+test("passkey signup, projects, live metrics, login and account deletion", async ({
   page,
   context,
 }) => {
-  const token = "local-browser-test-setup-token-not-for-production-123456789";
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -56,7 +55,7 @@ test("virtual passkey owner setup, create site, collect and view live metrics", 
       automaticPresenceSimulation: true,
     },
   });
-  await page.goto("/");
+  await page.goto("/signup");
   const status = await page.request
     .get("/api/auth/status")
     .then((r) => r.json());
@@ -65,26 +64,20 @@ test("virtual passkey owner setup, create site, collect and view live metrics", 
     await page
       .getByLabel("Workspace name", { exact: true })
       .fill("Browser workspace");
-    await page.getByLabel("Private setup token", { exact: true }).fill(token);
+
     await page
       .getByRole("button", { name: "Create your passkey", exact: true })
       .click();
-    await expect(page.getByText(/recovery codes/i).first()).toBeVisible({
-      timeout: 15000,
+    const recovery = page.getByRole("dialog", {
+      name: "Save your recovery codes",
     });
-    const acknowledgment = page.getByRole("checkbox");
-    if (await acknowledgment.count()) await acknowledgment.check();
-    const saved = page
-      .getByRole("button", { name: /saved|continue|done/i })
-      .first();
-    if (await saved.count()) {
-      await saved.click();
-      const next = page.getByRole("button", {
-        name: "Continue to your workspace",
-        exact: true,
-      });
-      if (await next.count()) await next.click();
-    }
+    await expect(recovery).toBeVisible({ timeout: 15000 });
+    await recovery
+      .getByRole("button", { name: "I have saved these codes", exact: true })
+      .click();
+    await recovery
+      .getByRole("button", { name: "Continue to your workspace", exact: true })
+      .click();
   } else {
     test.skip(
       true,
@@ -97,10 +90,10 @@ test("virtual passkey owner setup, create site, collect and view live metrics", 
   await page
     .getByRole("button", { name: "Add your first website", exact: true })
     .click();
-  await page.getByLabel("Website name", { exact: true }).fill("Browser test");
+  await page.getByLabel("Project name", { exact: true }).fill("Browser test");
   await page.getByLabel("Domain", { exact: true }).fill("localhost");
   await page
-    .getByRole("button", { name: "Add website", exact: true })
+    .getByRole("button", { name: "Add project", exact: true })
     .last()
     .click();
   await expect(
@@ -237,6 +230,44 @@ test("virtual passkey owner setup, create site, collect and view live metrics", 
     page.getByRole("combobox", { name: "Website", exact: true }),
   ).toContainText("second.example");
   expect(mismatches).toEqual([]);
+  await page.getByRole("button", { name: "Projects", exact: true }).click();
+  await expect(
+    page.getByRole("row", { name: "Open Second site" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sign in with a passkey", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Projects", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Workspace & account", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Delete account", exact: true })
+    .click();
+  const deletionDialog = page.getByRole("dialog", {
+    name: "Delete your account",
+    exact: true,
+  });
+  await deletionDialog
+    .getByLabel("Type DELETE to confirm", { exact: true })
+    .fill("DELETE");
+  await deletionDialog
+    .getByRole("button", {
+      name: "Verify passkey and delete account",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Your account has been deleted",
+    { timeout: 15000 },
+  );
+  const deletedStatus = await page.request
+    .get("/api/auth/status")
+    .then((r) => r.json());
+  expect(deletedStatus.authenticated).toBe(false);
 });
 
 test("queued opt-out prevents the first beacon and path redaction preserves SPA pageview counts", async ({
@@ -360,4 +391,47 @@ test("canonical trailing-slash navigation is deduplicated without collapsing red
     );
     await page.close();
   }
+});
+
+test("public product pages, signup links and privacy choices work on desktop and mobile", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: /Know your traffic/ }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Attribution", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toContainText(
+    "Journeys after explicit consent",
+  );
+  await page.screenshot({
+    path: "output/playwright/landing-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 2,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "output/playwright/landing-mobile.png",
+    fullPage: true,
+  });
+  await page.getByRole("link", { name: "Create account", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Create your account", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Your name", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Private setup token", { exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: "output/playwright/signup-mobile.png",
+    fullPage: true,
+  });
+  await page.goto("/docs");
+  await expect(
+    page.getByRole("heading", { name: /Your first project/ }),
+  ).toBeVisible();
 });

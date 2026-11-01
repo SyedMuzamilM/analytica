@@ -14,6 +14,7 @@ export interface SiteRecord {
   status: "active" | "paused" | "deleting";
   created_at: number;
   daily_limit: number;
+  logo_version?: number;
 }
 export const mapSite = (s: SiteRecord): Site => ({
   id: s.id,
@@ -25,6 +26,7 @@ export const mapSite = (s: SiteRecord): Site => ({
   status: s.status,
   createdAt: s.created_at,
   dailyLimit: s.daily_limit,
+  logoVersion: s.logo_version ?? 0,
 });
 export async function boundedJson(
   request: Request,
@@ -477,6 +479,81 @@ async function scopedSite(c: Context<AppEnv>) {
     .bind(c.get("workspace").id, c.req.param("sid"))
     .first<SiteRecord>();
 }
+analyticsRoutes.get("/workspaces/:wid/sites/:sid/logo", async (c) => {
+  const site = await scopedSite(c);
+  if (!site || !site.logo_version || !c.env.PROJECT_ASSETS)
+    return c.json({ error: "logo_not_found" }, 404);
+  const object = await c.env.PROJECT_ASSETS.get(
+    `projects/${site.workspace_id}/${site.id}/logo`,
+  );
+  if (!object) return c.json({ error: "logo_not_found" }, 404);
+  c.header(
+    "Content-Type",
+    object.httpMetadata?.contentType || "application/octet-stream",
+  );
+  c.header("Cache-Control", "private, no-store");
+  c.header("Content-Security-Policy", "default-src 'none'; sandbox");
+  return c.body(object.body);
+});
+analyticsRoutes.put(
+  "/workspaces/:wid/sites/:sid/logo",
+  requireWorkspace("admin"),
+  async (c) => {
+    const site = await scopedSite(c);
+    if (!site) return c.json({ error: "site_not_found" }, 404);
+    if (!c.env.PROJECT_ASSETS)
+      return c.json({ error: "Project image storage is not configured." }, 503);
+    const data = new Uint8Array(await c.req.arrayBuffer());
+    if (data.byteLength > 49152)
+      return c.json({ error: "Choose an image smaller than 48 KB." }, 413);
+    const type = c.req.header("Content-Type") || "";
+    const png =
+      type === "image/png" &&
+      [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => data[i] === v);
+    const jpeg =
+      type === "image/jpeg" &&
+      data[0] === 255 &&
+      data[1] === 216 &&
+      data[2] === 255;
+    const webp =
+      type === "image/webp" &&
+      new TextDecoder().decode(data.slice(0, 4)) === "RIFF" &&
+      new TextDecoder().decode(data.slice(8, 12)) === "WEBP";
+    if (!png && !jpeg && !webp)
+      return c.json({ error: "Choose a PNG, JPEG, or WebP image." }, 400);
+    const key = `projects/${site.workspace_id}/${site.id}/logo`;
+    await c.env.PROJECT_ASSETS.put(key, data, {
+      httpMetadata: { contentType: type },
+    });
+    const changed = await c.env.DB.prepare(
+      "UPDATE sites SET logo_version=logo_version+1 WHERE workspace_id=? AND id=? AND status!='deleting'",
+    )
+      .bind(site.workspace_id, site.id)
+      .run();
+    if (!changed.meta.changes) {
+      await c.env.PROJECT_ASSETS.delete(key);
+      return c.json({ error: "site_not_found" }, 404);
+    }
+    return c.json(mapSite((await scopedSite(c)) || site));
+  },
+);
+analyticsRoutes.delete(
+  "/workspaces/:wid/sites/:sid/logo",
+  requireWorkspace("admin"),
+  async (c) => {
+    const site = await scopedSite(c);
+    if (!site) return c.json({ error: "site_not_found" }, 404);
+    await c.env.PROJECT_ASSETS?.delete(
+      `projects/${site.workspace_id}/${site.id}/logo`,
+    );
+    await c.env.DB.prepare(
+      "UPDATE sites SET logo_version=0 WHERE workspace_id=? AND id=?",
+    )
+      .bind(site.workspace_id, site.id)
+      .run();
+    return c.json(mapSite({ ...site, logo_version: 0 }));
+  },
+);
 analyticsRoutes.patch(
   "/workspaces/:wid/sites/:sid",
   requireWorkspace("admin"),
