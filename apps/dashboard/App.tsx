@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
+  BarChart3,
   Check,
   CircleHelp,
   Copy,
@@ -20,6 +21,7 @@ import {
   ExternalLink,
   FileText,
   Fingerprint,
+  GitBranch,
   Globe,
   LayoutDashboard,
   LogOut,
@@ -29,6 +31,9 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  ShieldAlert,
+  Terminal,
+  Layers3,
   Users,
   Wallet,
   X,
@@ -61,7 +66,10 @@ import { ProjectsView, ProjectIcon } from "./ProjectsView";
 import { SelectField } from "./SelectField";
 import { ProjectImage } from "./ProjectImage";
 import { LayoutGrid } from "lucide-react";
+import { ObservabilityView, type ObservabilityKind } from "./ObservabilityView";
 
+type ObservabilityViewId =
+  "logs" | "traces" | "metrics" | "alerts" | "services";
 type View =
   | "projects"
   | "overview"
@@ -72,7 +80,8 @@ type View =
   | "settings"
   | "account"
   | "funnels"
-  | "journeys";
+  | "journeys"
+  | ObservabilityViewId;
 type FilterKey = "source" | "path" | "country" | "device" | "event";
 const filters: { key: FilterKey; label: string }[] = [
   { key: "source", label: "Source" },
@@ -90,6 +99,24 @@ const nav: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "journeys", label: "Journeys", icon: Users },
   { id: "revenue", label: "Revenue", icon: Wallet },
 ];
+const observabilityNav: {
+  id: ObservabilityViewId;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { id: "logs", label: "Logs", icon: Terminal },
+  { id: "traces", label: "Traces", icon: GitBranch },
+  { id: "metrics", label: "Metrics", icon: BarChart3 },
+  { id: "alerts", label: "Alerts", icon: ShieldAlert },
+  { id: "services", label: "Service map", icon: Layers3 },
+];
+const observabilityViews: ObservabilityViewId[] = [
+  "logs",
+  "traces",
+  "metrics",
+  "alerts",
+  "services",
+];
 const viewDescriptions: Record<View, string> = {
   projects: "A home for every website, application and experiment.",
   overview: "The people, pages, and paths behind your traffic.",
@@ -101,6 +128,11 @@ const viewDescriptions: Record<View, string> = {
   revenue: "Connect the visits to the value they create.",
   settings: "Your website, its installation, and your controls.",
   account: "Manage workspaces, members, and your account security.",
+  logs: "Search structured events across every service and environment.",
+  traces: "Follow slow or failing requests across your service graph.",
+  metrics: "Measure latency, throughput, and reliability over time.",
+  alerts: "Turn important changes into a clear, accountable response.",
+  services: "See service health, dependencies, and the traffic between them.",
 };
 
 function useLocation() {
@@ -792,9 +824,26 @@ function SettingsView({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [invitation, setInvitation] = useState("");
+  const [observabilityConnection, setObservabilityConnection] = useState<{
+    ingestUrl: string;
+    tracesUrl: string;
+  } | null>(null);
+  const [observabilityKey, setObservabilityKey] = useState("");
+  const [observabilityBusy, setObservabilityBusy] = useState(false);
   const snippet = `<script defer src="${window.location.origin}/tracker.js" data-site="${site.id}" data-mode="${site.privacyMode}"></script>`;
   const siteBase = `/api/workspaces/${workspace.id}/sites/${site.id}`;
   const canEdit = workspace.role !== "viewer";
+  useEffect(() => {
+    if (demo) return;
+    const controller = new AbortController();
+    api<{ ingestUrl: string; tracesUrl: string }>(
+      `${siteBase}/observability/connection`,
+      { signal: controller.signal },
+    )
+      .then(setObservabilityConnection)
+      .catch(() => {});
+    return () => controller.abort();
+  }, [demo, siteBase]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (demo) {
@@ -838,6 +887,25 @@ function SettingsView({
       notify("Additional passkey registered.");
     } catch (err) {
       notify(friendlyError(err));
+    }
+  }
+  async function createObservabilityKey() {
+    if (demo) {
+      notify("Create an account to connect AegisLog.");
+      return;
+    }
+    setObservabilityBusy(true);
+    try {
+      const result = await post<{ token: string }>(`${siteBase}/keys`, {
+        name: "AegisLog ingestion",
+        namespace: "aegislog",
+      });
+      setObservabilityKey(result.token);
+      notify("AegisLog key created. Copy it now; it will not be shown again.");
+    } catch (err) {
+      notify(friendlyError(err));
+    } finally {
+      setObservabilityBusy(false);
     }
   }
   async function createInvite() {
@@ -1087,6 +1155,89 @@ function SettingsView({
             Read the application guide <ArrowRight size={14} />
           </a>
         </section>
+        <section className="panel settings-panel aegislog-connection-panel">
+          <div className="panel-heading">
+            <h2>Connect AegisLog</h2>
+            <span className="small-pill">Structured observability</span>
+          </div>
+          <p>
+            Send detailed logs, audit records, and OTLP request traces from a
+            backend service into this project. AegisLog redacts sensitive fields
+            before transport, and Analytica redacts again at ingestion.
+          </p>
+          <dl className="connection-facts">
+            <div>
+              <dt>Log ingest endpoint</dt>
+              <dd>
+                <code>
+                  {observabilityConnection?.ingestUrl ||
+                    `${window.location.origin}/v1/observability/ingest`}
+                </code>
+                <CopyButton
+                  value={
+                    observabilityConnection?.ingestUrl ||
+                    `${window.location.origin}/v1/observability/ingest`
+                  }
+                  label="Copy endpoint"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Trace ingest endpoint</dt>
+              <dd>
+                <code>
+                  {observabilityConnection?.tracesUrl ||
+                    `${window.location.origin}/v1/observability/otlp/traces`}
+                </code>
+                <CopyButton
+                  value={
+                    observabilityConnection?.tracesUrl ||
+                    `${window.location.origin}/v1/observability/otlp/traces`
+                  }
+                  label="Copy endpoint"
+                />
+              </dd>
+            </div>
+          </dl>
+          {observabilityKey ? (
+            <div className="aegislog-key-reveal">
+              <strong>Copy this key now</strong>
+              <p>It is shown once. Store it in your backend secret manager.</p>
+              <code>{observabilityKey}</code>
+              <CopyButton value={observabilityKey} label="Copy AegisLog key" />
+            </div>
+          ) : (
+            <button
+              className="button primary small"
+              disabled={!canEdit || observabilityBusy}
+              onClick={() => void createObservabilityKey()}
+            >
+              {observabilityBusy ? "Creating key…" : "Create AegisLog key"}
+            </button>
+          )}
+          <pre className="aegislog-snippet">
+            <code>{`import { createLogger } from "aegislog";
+import { HttpBatchSink } from "@aegislog/transports";
+
+const logger = createLogger({
+  sinks: [new HttpBatchSink({
+    url: "${observabilityConnection?.ingestUrl || `${window.location.origin}/v1/observability/ingest`}",
+    headers: { Authorization: "Bearer \${process.env.ANALYTICA_AEGISLOG_KEY}" },
+  })],
+});`}</code>
+          </pre>
+          <pre className="aegislog-snippet">
+            <code>{`import { startProfiling } from "@aegislog/profiling";
+
+startProfiling({
+  serviceName: "your-service-name",
+  otlp: {
+    endpoint: "${observabilityConnection?.tracesUrl || `${window.location.origin}/v1/observability/otlp/traces`}",
+    headers: { Authorization: "Bearer \${process.env.ANALYTICA_AEGISLOG_KEY}" },
+  },
+});`}</code>
+          </pre>
+        </section>
       </div>
     </div>
   );
@@ -1098,9 +1249,13 @@ export function App() {
   const requestedView = params.get("view") as View | null;
   const view =
     requestedView &&
-    [...nav.map((item) => item.id), "settings", "account", "projects"].includes(
-      requestedView,
-    )
+    [
+      ...nav.map((item) => item.id),
+      ...observabilityNav.map((item) => item.id),
+      "settings",
+      "account",
+      "projects",
+    ].includes(requestedView)
       ? requestedView
       : !isDemo && !params.get("site")
         ? "projects"
@@ -1108,6 +1263,9 @@ export function App() {
   const period = ["7d", "30d", "90d"].includes(params.get("period") ?? "")
     ? params.get("period")!
     : "7d";
+  const isObservability = observabilityViews.includes(
+    view as ObservabilityViewId,
+  );
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [authError, setAuthError] = useState("");
   const [sites, setSites] = useState<Site[]>([]);
@@ -1156,7 +1314,15 @@ export function App() {
     if (!isDemo) void loadAuth();
   }, [isDemo, loadAuth]);
   useEffect(() => {
-    document.title = `${view === "projects" ? "Projects" : view === "overview" ? "Overview" : (nav.find((item) => item.id === view)?.label ?? (view === "account" ? "Workspace & account" : "Settings"))}${site ? ` · ${site.name}` : ""} · Analytica`;
+    const title =
+      view === "projects"
+        ? "Projects"
+        : view === "overview"
+          ? "Overview"
+          : (nav.find((item) => item.id === view)?.label ??
+            observabilityNav.find((item) => item.id === view)?.label ??
+            (view === "account" ? "Workspace & account" : "Settings"));
+    document.title = `${title}${site ? ` · ${site.name}` : ""} · Analytica`;
   }, [view, site?.name]);
   useEffect(() => {
     if (isDemo || !status?.authenticated || !workspace) return;
@@ -1189,7 +1355,8 @@ export function App() {
       !workspace ||
       view === "settings" ||
       view === "account" ||
-      view === "projects"
+      view === "projects" ||
+      isObservability
     )
       return;
     const controller = new AbortController();
@@ -1222,7 +1389,10 @@ export function App() {
     queryKey,
     period,
     refresh,
-    view === "settings" || view === "account" || view === "projects",
+    view === "settings" ||
+      view === "account" ||
+      view === "projects" ||
+      isObservability,
   ]);
   const data = isDemo ? demoData : report;
   const activeFilters = filters.filter((filter) => params.get(filter.key));
@@ -1378,6 +1548,25 @@ export function App() {
             </button>
           ))}
         </nav>
+        <div className="nav-section-label observability-nav-label">
+          Observability
+        </div>
+        <nav aria-label="Observability navigation">
+          {observabilityNav.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${view === item.id ? "active" : ""}`}
+              onClick={() => changeView(item.id)}
+              aria-current={view === item.id ? "page" : undefined}
+            >
+              <item.icon size={18} />
+              <span>{item.label}</span>
+              {item.id === "alerts" && (
+                <span className="nav-alert-count">2</span>
+              )}
+            </button>
+          ))}
+        </nav>
         <div className="sidebar-divider" />
         <button
           className={`nav-item ${view === "settings" ? "active" : ""}`}
@@ -1527,14 +1716,17 @@ export function App() {
                       ? "Website settings"
                       : view === "account"
                         ? "Workspace & account"
-                        : nav.find((item) => item.id === view)?.label}
+                        : (nav.find((item) => item.id === view)?.label ??
+                          observabilityNav.find((item) => item.id === view)
+                            ?.label)}
               </h1>
               <p>{viewDescriptions[view]}</p>
             </div>
             <div className="page-actions">
               {view !== "settings" &&
                 view !== "account" &&
-                view !== "projects" && (
+                view !== "projects" &&
+                !isObservability && (
                   <>
                     <button
                       className={`icon-button refresh-button ${reportLoading ? "spinning" : ""}`}
@@ -1566,6 +1758,7 @@ export function App() {
           {view !== "settings" &&
             view !== "account" &&
             view !== "projects" &&
+            !isObservability &&
             site && (
               <div className="report-toolbar">
                 <div className="filter-chips">
@@ -1657,7 +1850,8 @@ export function App() {
           {(sitesLoading || reportLoading) &&
             !data &&
             view !== "account" &&
-            view !== "projects" && (
+            view !== "projects" &&
+            !isObservability && (
               <div
                 className="report-skeleton"
                 aria-label="Loading report"
@@ -1676,7 +1870,8 @@ export function App() {
             reportError &&
             view !== "settings" &&
             view !== "account" &&
-            view !== "projects" && (
+            view !== "projects" &&
+            !isObservability && (
               <div role="alert" className="error-panel">
                 <strong>This report couldn't be loaded.</strong>
                 <p>{reportError}</p>
@@ -1747,10 +1942,20 @@ export function App() {
               notify={notify}
             />
           )}
+          {site && workspace && isObservability && (
+            <ObservabilityView
+              kind={view as ObservabilityKind}
+              site={site}
+              workspaceId={workspace.id}
+              demo={isDemo}
+              notify={notify}
+            />
+          )}
           {site &&
             view !== "settings" &&
             view !== "account" &&
             view !== "projects" &&
+            !isObservability &&
             data &&
             !reportError && (
               <>

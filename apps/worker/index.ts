@@ -11,6 +11,10 @@ import { funnelRoutes, cleanupFunnels } from "./funnels";
 import type { AppEnv, Bindings } from "./env";
 import { cleanupProjectAssets } from "./project-assets";
 import { cleanupDeletedWorkspaces } from "./account-deletion";
+import {
+  observabilityIngestRoutes,
+  observabilityRoutes,
+} from "./observability";
 
 const app = new Hono<AppEnv>();
 
@@ -151,7 +155,9 @@ app.get("/healthz", async (c) => {
 app.route("/api/auth", authRoutes);
 app.route("/api", analyticsRoutes);
 app.route("/v1", collectRoutes);
+app.route("/v1", observabilityIngestRoutes);
 app.route("/api", revenueRoutes);
+app.route("/api", observabilityRoutes);
 app.route("/v1", moneyRoutes);
 app.route("/api", privacyRoutes);
 app.route("/api", funnelRoutes);

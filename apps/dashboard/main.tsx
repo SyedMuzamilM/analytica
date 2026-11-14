@@ -6,6 +6,7 @@ import "./styles.css";
 import "./product.css";
 import "./marketing.css";
 import "./dropdowns.css";
+import "./observability.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
